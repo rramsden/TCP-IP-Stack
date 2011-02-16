@@ -8,7 +8,7 @@
 
 use strict;
 
-use lib "/home/student/trigonas/460/TCP-IP-Stack/lib";
+use lib "lib";
 
 use Exporter;
 #use NetPacket::Ethernet qw/ :types /;

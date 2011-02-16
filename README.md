@@ -1,3 +1,7 @@
-=== TCP/IP Stack in Perl
+### TCP/IP Stack in Perl
 
-nothing to see here... move along...
+  This is a project for our CSCI460 Network and communications class.
+
+### TODO
+ 
+  * fill in something here? 

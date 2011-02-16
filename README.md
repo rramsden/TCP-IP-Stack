@@ -1,9 +1,11 @@
 ### TCP/IP Stack in Perl
 
-I AM ADDING THINGS TO THE README
+This is a TCP/IP stack written in Perl. This project is being maintained by students at the University of Vancouver Island.
 
+### Setup
 
-test
+Setup instructions here...
 
-nothing to see here... move along...
-test
+### TODO
+
+* implement ARP

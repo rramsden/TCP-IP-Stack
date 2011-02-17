@@ -1,0 +1,5 @@
+# Ignore emacs backups
+*~
+
+# Ignore driver.pl output
+peter.cap

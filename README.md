@@ -7,7 +7,7 @@ University of Vancouver Island.
 ### Goals
 
 * RFC compliant across all layers
-* Abstract and isolate each layer ie. can only see what is above and below it on the stack
+* Layer isolation ie. a layer can only see what is above and below it on the stack
 
 ### TODO
 

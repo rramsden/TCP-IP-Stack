@@ -1,11 +1,14 @@
-### TCP/IP Stack in Perl
+### NetStack a TCP/IP stack written in Perl
 
-This is a TCP/IP stack written in Perl. This project is being maintained by students at the University of Vancouver Island.
+The goal of this project is to create a complete RFC compliant TCP/IP Stack in Perl. This project
+is being developed solely for educational and research purposes by computer science students at the 
+University of Vancouver Island. 
 
-### Setup
+### Goals
 
-Setup instructions here...
+* RFC compliant across all layers
+* Abstract and isolate each layer ie. can only see what is above and below it on the stack
 
 ### TODO
 
-* implement ARP
+* benchmark threads/evented model for handling incoming packets

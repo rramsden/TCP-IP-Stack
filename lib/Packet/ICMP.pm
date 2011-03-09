@@ -87,8 +87,21 @@ sub new {
   return bless $self, ref($class) || $class;
 }
 
+# Modified by Simon Trigona
 sub encode {
   my ($self) = @_;
+
+  if ($self->{autogen_cksum}) {      
+      my $pseudo = pack(
+	  'C			C
+           n			a*',
+	  $self->{type},	$self->{code},
+	  0,            	$self->{data}
+	  );
+
+      my $cksum = &icmp_checksum($pseudo);
+      $self->{cksum} = $cksum;
+  }
 
   my $pkt = pack(
    'C			C
@@ -96,11 +109,6 @@ sub encode {
     $self->{type},	$self->{code},
     $self->{cksum},	$self->{data}
   );
-  if ($self->{autogen_cksum}) {      
-    my $cksum = &icmp_checksum($pkt);
-    substr($pkt, 2, 2) = pack("n", $cksum);
-    $self->{cksum} = $cksum;
-  }
 
   return $pkt;
 }

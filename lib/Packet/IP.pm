@@ -186,7 +186,8 @@ sub encode {
       0,		$self->{src_ip},
       $self->{dest_ip}
     );
-    my $cksum = &ip_checksum($pkt);
+    # Simon Trigona
+    my $cksum = &ip_checksum($pseudo);
     substr($pkt, 10, 2) = pack("n", $cksum);
     $self->{cksum} = $cksum;
   }

@@ -7,9 +7,10 @@ use NetStack;
 
 
 my $stack = NetStack->new(
-    my_ip => '10.0.0.16',
-    my_mac => 'aa:bb:cc:aa:bb:cc',
-    device => 'tap0',
-    netmask => '255.255.255.0'
+    my_ip => '10.0.0.31',
+    my_mac => 'aa:aa:bb:bb:cc:cc',
+    device => 'tapT',
+    netmask => '255.255.255.0',
+    default => '10.0.0.30',
     );
 $stack->run();

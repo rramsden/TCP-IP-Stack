@@ -40,7 +40,7 @@ sub new {
 	my_ip  => "192.168.56.1",
 	device => "tap0",
 	netmask => "255.255.255.0",
-	gateway => "192.168.56.30",
+	default => "192.168.56.1",
 	fh => "",
 	ARP_cahce => {},
 	# Will overwrite any of the default values with the user's
@@ -85,6 +85,14 @@ sub run {
     
 }
 
+sub dump_arp {
+    for my $key (keys %{$self->{ARP_cache}}) {
+	print  int_to_ip($key), " -> ";
+	print $self->{ARP_cache}->{$key} ,"\n";
+	print $self->{default}, "\n";
+    }
+}
+
 sub send_tap {
     my ($self, $raw_eth) = @_;
     my $raw_pkt = pack('H8 a*', $self->{pre}, $raw_eth);
@@ -116,13 +124,12 @@ sub send_eth {
     
     $eth_obj->{src_mac} = $self->{my_mac};
     
-    my $dest_eth = $self->{ARP_cache}->{$dest_ip};
+    # Always use 'default'
+    my $dest_eth = $self->{ARP_cache}->{ip_to_int($self->{default})};
     if (!defined($dest_eth)) {
-	#printf("ARP request %s\n", int_to_ip($dest_ip));
-	#return;
-	$dest_eth = "08:00:27:e7:33:7e";
+	printf("Need to make an ARP request %s\n", int_to_ip($dest_ip));
+	return;
     }
-    $dest_eth = "00:ff:4b:1e:34:5d";
     
     $eth_obj->{dest_mac} = $dest_eth;
     

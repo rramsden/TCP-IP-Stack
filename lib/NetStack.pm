@@ -7,16 +7,17 @@ $VERSION = '0.01';
 
 use lib ".";
 
-use IO::Select;
-use Packet::Definitions;
-use Packet::Ethernet;
-use Packet::ARP;
-use Packet::IP;
+use NetStack::Ethernet;
+use NetStack::ARP;
+use NetStack::IP;
+use NetStack::ICMP;
+
+use AnyEvent;
+
 use Packet::ICMP qw/ :types /;
 use Packet::Lookup qw/ :mac :ip /;
-#use Net::Pcap;
+
 use TunTap;
-#use Time::HiRes qw/gettimeofday/;
 
 my $ETH_TYPE_ARP = &Packet::Definitions::ETHERTYPE_ARP;
 my $ETH_TYPE_IP = &Packet::Definitions::ETHERTYPE_IP;
@@ -40,212 +41,120 @@ sub new {
 	my_ip  => "192.168.56.1",
 	device => "tap0",
 	netmask => "255.255.255.0",
-	gateway => "192.168.56.30",
+	default => "192.168.56.1",
 	fh => "",
-	ARP_cahce => {},
+	arp_cahce => {},
+	task => [],
 	# Will overwrite any of the default values with the user's
 	@args
     };
-    
-    return bless($self, $class);
+
+    bless($self, $class);
+
+    $self->initialize();
+
+    return $self;
 }
 
+sub initialize {
+    my ($self) = @_;
+    
+    $self->{eth} = NetStack::Ethernet->new(
+	my_mac => $self->{my_mac},
+	default => $self->{default},
+	task => $self->{task},
+	);
+
+    $self->{arp} = NetStack::ARP->new(
+	my_mac => $self->{my_mac},
+	my_ip => $self->{my_ip},
+	arp_cache => $self->{eth}->{arp_cache},
+	arp_up => $self->{eth}->{arp_up},
+	eth_down => $self->{eth}->{eth_down},
+	task => $self->{task},
+	);
+    
+    $self->{ip} = NetStack::IP->new(
+	my_ip => $self->{my_ip},
+	ip_up => $self->{eth}->{ip_up},
+	eth_down => $self->{eth}->{eth_down},
+	task => $self->{task},
+	);
+    
+    $self->{icmp} = NetStack::ICMP->new(
+	icmp_up => $self->{ip}->{icmp_up},
+	ip_down => $self->{ip}->{ip_down},
+	task => $self->{task},
+	);
+    
+    # Link process references with anonymous subroutines
+    $self->{eth}->{tap_p} = sub {$self->send_tap()};
+    $self->{eth}->{arp_p} = sub {$self->{arp}->process_up()};
+    $self->{eth}->{ip_p} = sub {$self->{ip}->process_up()};
+
+    $self->{arp}->{eth_p} = sub {$self->{eth}->process_down()};
+
+    $self->{ip}->{eth_p} = sub {$self->{eth}->process_down()};
+    $self->{ip}->{icmp_p} = sub {$self->{icmp}->process_up()};
+
+    $self->{icmp}->{ip_p} = sub {$self->{ip}->process_down()};
+
+}
 
 sub run {
     my ($self) = @_;
     my $err;
 
-
     $self->{'fh'} = TunTap->attach(
 	name => $self->{'device'}
 	);
     
-    my $sel = new IO::Select();
-    $sel->add($self->{'fh'});
-    my $count = 0;
-    while ( 1 ) {
-	if ( $sel->can_read() ) {
-	    $count++;
-	    
-	    my $raw_pkt;
-	    my $ret = sysread($self->{'fh'}, $raw_pkt, 4096);
-	    
-	    my $eth = Packet::Ethernet->new();
-	    my $pre;
-	    my $raw_eth;
-	    # Remove 4 bytes of preamble
-	    ($pre, $raw_eth) = unpack('H8 a*', $raw_pkt);
-	    #printf("%b\n", $pre);
-	    #print $eth->hexdump($raw_pkt), "\n";
 
-	    $self->{pre} = $pre;
-	    $self->recv_eth($raw_eth);
+    my $y_event = AnyEvent->condvar;
+    my $x_event = AnyEvent->io(
+	fh => $self->{fh},
+	poll => "r",
+	cb => sub {
+	    my $pkt_raw;
+	    my $ret = sysread($self->{'fh'}, $pkt_raw, 4096);
+	    if (!defined($ret)) {
+		return;
+	    }
+
+	    push(@{$self->{eth}->{eth_up}}, $pkt_raw);
+	    push(@{$self->{task}}, sub {$self->{eth}->process_up()});
 	}
-    }
+	);
     
+    my $z_event = AnyEvent->idle(
+	cb => sub {
+	    my $task = shift(@{$self->{task}});
+	    if (defined($task)) {
+		$task->();
+	    }
+	}
+	);
+    
+    $y_event->recv;
+
+    return;	
+}
+
+sub dump_arp {
+    my ($self) = @_;
+    for my $key (keys %{$self->{arp_cache}}) {
+	print  int_to_ip($key), " -> ";
+	print $self->{arp_cache}->{$key} ,"\n";
+	print $self->{default}, "\n";
+    }
 }
 
 sub send_tap {
-    my ($self, $raw_eth) = @_;
-    my $raw_pkt = pack('H8 a*', $self->{pre}, $raw_eth);
-    syswrite($self->{fh}, $raw_pkt);
-    
-}
-
-# Process Ethernet packet
-sub recv_eth {
-    my ($self, $eth_raw) = @_;
-    
-    my $eth_obj = Packet::Ethernet->new();
-    $eth_obj->decode($eth_raw);
-    
-    # Switch on type
-    if ($eth_obj->{type} == $ETH_TYPE_ARP) {
-	$self->recv_arp($eth_obj->{data});
-    } elsif ($eth_obj->{type} == $ETH_TYPE_IP) {
-	$self->recv_ip($eth_obj->{data});
-    }
-    
-}
-
-# Send Ethernet packet
-# TODO - change $dest_eth to $dest_ip and do a lookup
-#         ie. check ARP cache
-sub send_eth {
-    my ($self, $eth_obj, $dest_ip) = @_;
-    
-    $eth_obj->{src_mac} = $self->{my_mac};
-    
-    my $dest_eth = $self->{ARP_cache}->{$dest_ip};
-    if (!defined($dest_eth)) {
-	#printf("ARP request %s\n", int_to_ip($dest_ip));
-	#return;
-	$dest_eth = "08:00:27:e7:33:7e";
-    }
-    $dest_eth = "00:ff:4b:1e:34:5d";
-    
-    $eth_obj->{dest_mac} = $dest_eth;
-    
-    #my $dest_mac = lookup_ip($dest_ip);
-    #if (defined($dest_mac)) {
-    #$eth_obj->dest_mac($dest_mac);
-    #} else {
-    # Put eth_obj + dest_ip in list
-    # Send ARP request
-    #}
-    
-    my $eth_raw = $eth_obj->encode();
-    $self->send_tap($eth_raw);
-}
-
-sub recv_arp {
-    my ($self, $arp_raw) = @_;
-    
-    my $arp_obj = Packet::ARP->new();
-    $arp_obj->decode($arp_raw);
-    # Update ARP cahce
-    $self->{ARP_cache}->{$arp_obj->{sender_ip}} = $arp_obj->{sender_eth};
-    
-    if ($arp_obj->{target_ip} eq $self->{my_ip}) {
-	print "ARP: Not for me\n";
+    my ($self) = @_;
+    my $eth_raw = shift(@{$self->{eth}->{tap_down}});
+    if (!defined $eth_raw) {
 	return;
     }
-
-    if ($arp_obj->{opcode} == 1) {
-	print "ARP request\n";
-	my $arp_reply = Packet::ARP->new();
-	
-	# So we don't have to copy all the members over
-	$arp_reply->decode($arp_raw);
-	# Change to a reply
-	$arp_reply->{opcode} = 2;
-	$arp_reply->{sender_eth} = $self->{my_mac};
-	$arp_reply->{sender_ip} = $self->{my_ip};
-	$arp_reply->{target_eth} = $arp_obj->{sender_eth};
-	$arp_reply->{target_ip} = $arp_obj->{sender_ip};
-
-	$self->send_arp($arp_reply);
-    } elsif ($arp_obj->{opcode} == 2) {
-	print "reply\n";
-	# Cache updated from above
-	# TODO: check pending ethernet packets & send
-    } else {
-	print "ARP: garbage\n";
-    }
-}
-
-sub send_arp {
-    my ($self, $arp_obj) = @_;
     
-    my $eth_obj = Packet::Ethernet->new();
-    $eth_obj->{data} = $arp_obj->encode();
-    $eth_obj->{type} = $ETH_TYPE_ARP;
-    
-    $self->send_eth($eth_obj, $arp_obj->{target_ip});
-}
-
-sub recv_ip {
-    my ($self, $ip_raw) = @_;
-    
-    my $ip_obj = Packet::IP->new();
-    $ip_obj->decode($ip_raw);
-    
-    if ($ip_obj->{proto} == 1) {#ICMP
-	$self->recv_icmp($ip_obj->{data}, $ip_obj->{src_ip});
-	
-    } elsif ($ip_obj->{proto} == 2) {#IGMP
-	
-    } #...
-
-}
-
-sub send_ip {
-    my ($self, $ip_obj) = @_;
-    $ip_obj->{src_ip} = $self->{my_ip};
-    
-    my $eth_obj = Packet::Ethernet->new();
-    $eth_obj->{data} = $ip_obj->encode();
-    $eth_obj->{type} = $ETH_TYPE_IP;
-
-    $self->send_eth($eth_obj, $ip_obj->{dest_ip});
-}
-
-sub recv_ip6 {
-
-
-}
-
-sub send_ip6 {
-
-
-}
-
-
-sub recv_icmp {
-    my ($self, $icmp_raw, $src_ip) = @_;
-    
-    my $icmp_obj = Packet::ICMP->new();
-    $icmp_obj->decode($icmp_raw);
-    if ($icmp_obj->{type} == ICMP_ECHO_REPLY) { # Ping request
-	
-    } elsif ($icmp_obj->{type} == ICMP_ECHO) { # Ping request
-	print "Ping request\n";
-	$icmp_obj->{type} = ICMP_ECHO_REPLY;
-	$icmp_obj->{autogen_chksum} = 1;
-	$self->send_icmp($icmp_obj, $src_ip);
-    }
-    
-    
-}
-
-sub send_icmp {
-    my ($self, $icmp_obj, $dest_ip) = @_;
-    
-    my $ip_obj = Packet::IP->new();
-    $ip_obj->{dest_ip} = $dest_ip;
-    $ip_obj->{proto} = 1;
-    $ip_obj->{data} = $icmp_obj->encode();
-
-    $self->send_ip($ip_obj);
-
+    syswrite($self->{fh}, $eth_raw);
 }

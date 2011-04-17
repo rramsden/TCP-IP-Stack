@@ -22,6 +22,8 @@ use TunTap;
 my $ETH_TYPE_ARP = &Packet::Definitions::ETHERTYPE_ARP;
 my $ETH_TYPE_IP = &Packet::Definitions::ETHERTYPE_IP;
 
+$|=1;
+
 # Config params:
 #  Device
 #  Netmask
@@ -44,6 +46,7 @@ sub new {
 	default => "192.168.56.1",
 	fh => "",
 	arp_cahce => {},
+	stdout => [],
 	task => [],
 	# Will overwrite any of the default values with the user's
 	@args
@@ -86,7 +89,9 @@ sub initialize {
 	ip_down => $self->{ip}->{ip_down},
 	task => $self->{task},
 	);
-    
+
+    $self->{arp_cache} = $self->{eth}->{arp_cache};
+
     # Link process references with anonymous subroutines
     $self->{eth}->{tap_p} = sub {$self->send_tap()};
     $self->{eth}->{arp_p} = sub {$self->{arp}->process_up()};
@@ -103,20 +108,23 @@ sub initialize {
 
 sub run {
     my ($self) = @_;
-    my $err;
-
-    $self->{'fh'} = TunTap->attach(
-	name => $self->{'device'}
+        
+    $self->{fh} = TunTap->attach(
+	name => $self->{device}
 	);
     
+    print("shell: ");
 
+    # Wair variable
     my $y_event = AnyEvent->condvar;
-    my $x_event = AnyEvent->io(
+    
+    # IO event for the Tap device
+    my $tap_event = AnyEvent->io(
 	fh => $self->{fh},
 	poll => "r",
 	cb => sub {
 	    my $pkt_raw;
-	    my $ret = sysread($self->{'fh'}, $pkt_raw, 4096);
+	    my $ret = sysread($self->{fh}, $pkt_raw, 4096);
 	    if (!defined($ret)) {
 		return;
 	    }
@@ -125,8 +133,19 @@ sub run {
 	    push(@{$self->{task}}, sub {$self->{eth}->process_up()});
 	}
 	);
+
+    my $input_event = AnyEvent->io(
+	fh => \*STDIN,
+	poll => "r",
+	cb => sub {
+	    my $line = <>;
+	    push(@{$self->{stdin}}, $line);
+	    push(@{$self->{task}}, sub {$self->stdin_p()});
+	}
+	);
     
-    my $z_event = AnyEvent->idle(
+    # Idle process event
+    my $idle_event = AnyEvent->idle(
 	cb => sub {
 	    my $task = shift(@{$self->{task}});
 	    if (defined($task)) {
@@ -142,11 +161,12 @@ sub run {
 
 sub dump_arp {
     my ($self) = @_;
+    my $rtn = "";
     for my $key (keys %{$self->{arp_cache}}) {
-	print  int_to_ip($key), " -> ";
-	print $self->{arp_cache}->{$key} ,"\n";
-	print $self->{default}, "\n";
+	$rtn = $rtn . int_to_ip($key) . " -> ";
+	$rtn = $rtn . $self->{arp_cache}->{$key} . "\n";
     }
+    return $rtn;
 }
 
 sub send_tap {
@@ -157,4 +177,36 @@ sub send_tap {
     }
     
     syswrite($self->{fh}, $eth_raw);
+}
+
+sub stdout_p {
+    my ($self) = @_;
+    while (@{$self->{stdout}} != 0) {
+	print(shift(@{$self->{stdout}}));
+    }
+    print("shell: ");
+}
+
+
+sub stdin_p {
+    my ($self) = @_;
+    
+    my $command = shift(@{$self->{stdin}});
+    if (!defined $command) {
+	return;
+    }
+    chop($command);
+
+    my $out = "";
+    if($command eq "h") {
+	$out = "h\thelp\nl\tlist size of fifo queues\np ip\tping ip address\nq\tquit\n";
+    } elsif ($command eq "a") {
+	$out = "ARP Cache:\n" . $self->dump_arp();
+    } elsif ($command eq "q") {
+	exit(0);
+    } else {
+	$out = "ERROR type h<CR> for help\n";
+    }
+    push(@{$self->{stdout}}, $out);
+    push(@{$self->{task}}, sub {$self->stdout_p});
 }

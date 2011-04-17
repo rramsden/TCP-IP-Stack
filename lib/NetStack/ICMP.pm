@@ -40,13 +40,11 @@ sub process_up {
     if ($icmp_obj->{type} == ICMP_ECHO_REPLY) { # Ping request
 	
     } elsif ($icmp_obj->{type} == ICMP_ECHO) { # Ping request
-	print "Ping request\n";
-	$icmp_obj->{type} = ICMP_ECHO_REPLY;
-	$icmp_obj->{autogen_chksum} = 1; # Important!
-	push(@{$self->{icmp_down}}, [$icmp_obj, $src_ip]);
-	push(@{$self->{task}}, sub {$self->process_down()});
+      $icmp_obj->{type} = ICMP_ECHO_REPLY;
+      $icmp_obj->{autogen_chksum} = 1; # Important!
+      push(@{$self->{icmp_down}}, [$icmp_obj, $src_ip]);
+      push(@{$self->{task}}, sub {$self->process_down()});
     }
-    
 }
 
 sub process_down {

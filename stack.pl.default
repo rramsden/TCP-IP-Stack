@@ -1,0 +1,16 @@
+use strict;
+
+use lib "lib";
+
+use NetStack;
+
+
+
+my $stack = NetStack->new(
+    my_ip => '10.0.0.31',		# Stack's IP
+    my_mac => 'aa:aa:bb:bb:cc:cc',	# Stack's MAC
+    device => 'tap0',			# Stack's device
+    netmask => '255.255.255.0',		# Doesn't really matter..
+    default => '10.0.0.30',		# IP of tap device
+    );
+$stack->run();

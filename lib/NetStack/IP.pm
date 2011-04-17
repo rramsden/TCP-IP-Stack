@@ -24,6 +24,8 @@ sub new {
 	eth_p    => sub {},
 	icmp_up  => [],
 	icmp_p   => sub {},
+	udp_up  => [],
+	udp_p   => sub {},
 	stdout    => [],
 	stdout    => sub {},
 	# Need to put other FIFOs here...
@@ -55,6 +57,9 @@ sub process_up {
     } elsif ($protocol == 6) {#TCP
 	push(@{$self->{tcp_up}}, $ip_obj->{data});
 	push(@{$self->{task}}, $self->{tcp_p}); # invoke process_up in TCP module
+    } elsif ($protocol == 17) {#UDP
+	push(@{$self->{udp_up}}, [$ip_obj->{data}, $ip_obj->{src_ip}]);
+	push(@{$self->{task}}, $self->{udp_p}); # invoke process_up in TCP module
     }
 
 }

@@ -212,6 +212,7 @@ sub send_tap {
 
 sub stdout_p {
     my ($self) = @_;
+    print("\n");
     while (@{$self->{stdout}} != 0) {
 	print(shift(@{$self->{stdout}}));
     }

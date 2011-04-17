@@ -41,7 +41,7 @@ sub process_up {
     $udp_obj->decode($udp_raw);
     
     
-    push(@{$self->{stdout}}, $udp_obj->{data});
+    push(@{$self->{stdout}}, $udp_obj->{dest_port} . ": " .$udp_obj->{data});
     push(@{$self->{task}},  $self->{stdout_p});
     
 }

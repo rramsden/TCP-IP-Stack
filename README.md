@@ -11,4 +11,4 @@ University of Vancouver Island.
 
 ### TODO
 
-* benchmark threads/evented model for handling incoming packets 
+* benchmark threads/evented model for handling incoming packets

@@ -12,6 +12,7 @@ use NetStack::ARP;
 use NetStack::IP;
 use NetStack::ICMP;
 use NetStack::TCP;
+use NetStack::UDP;
 
 use AnyEvent;
 
@@ -99,6 +100,14 @@ sub initialize {
 	stdout => $self->{stdout},
 	stdout_p => sub {$self->stdout_p()}
 	);
+
+    $self->{udp} = NetStack::UDP->new(
+	udp_up => $self->{ip}->{udp_up},
+	ip_down => $self->{ip}->{ip_down},
+	task => $self->{task},
+	stdout => $self->{stdout},
+	stdout_p => sub {$self->stdout_p()}
+	);
     
     $self->{icmp} = NetStack::ICMP->new(
 	icmp_up => $self->{ip}->{icmp_up},
@@ -118,7 +127,12 @@ sub initialize {
     $self->{ip}->{eth_p} = sub {$self->{eth}->process_down()};
     $self->{ip}->{icmp_p} = sub {$self->{icmp}->process_up()};
     $self->{ip}->{tcp_p} = sub {$self->{tcp}->process_up()};
+    $self->{ip}->{udp_p} = sub {$self->{udp}->process_up()};
     
+    $self->{tcp}->{ip_p} = sub {$self->{ip}->process_down()};
+
+    $self->{udp}->{ip_p} = sub {$self->{ip}->process_down()};
+
     $self->{icmp}->{ip_p} = sub {$self->{ip}->process_down()};
     
 }

@@ -7,6 +7,7 @@ use IO::File;
 
 use constant IFF_TUN   => 0x0001;
 use constant IFF_TAP   => 0x0002;
+use constant IFF_NO_PI => 0x1000; # we don't need the preamble
 use constant TUN_MAX_FRAME => 4096;
 use constant TUNSETIFF => 0x400454ca;
 use constant STRUCT_IFREQ => 'Z16 s';
@@ -20,7 +21,7 @@ sub attach {
   # parameters
   my $self = {
     name => '', # device name eg. tap0 
-    type => IFF_TAP,
+    type => IFF_TAP | IFF_NO_PI,
     %args
   };
 

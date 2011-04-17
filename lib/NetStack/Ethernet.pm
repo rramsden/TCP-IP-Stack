@@ -26,6 +26,8 @@ sub new {
 	ip_p      => sub {},
 	tap_down  => [],
 	tap_p     => sub {},
+	stdout    => [],
+	stdout    => sub {},
 	arp_cache => {},
 	task      => [],
 	my_mac    => "11:22:33:44:55:66",

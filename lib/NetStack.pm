@@ -46,7 +46,7 @@ sub new {
 	netmask => "255.255.255.0",
 	default => "192.168.56.1",
 	fh => "",
-	arp_cahce => {},
+	arp_cache => {},
 	stdout => [],
 	task => [],
 	# Will overwrite any of the default values with the user's
@@ -64,18 +64,23 @@ sub initialize {
     my ($self) = @_;
     
     $self->{eth} = NetStack::Ethernet->new(
+	arp_cache => $self->{arp_cache},
 	my_mac => $self->{my_mac},
 	default => $self->{default},
 	task => $self->{task},
+	stdout => $self->{stdout},
+	stdout_p => sub {$self->stdout_p()}
 	);
-
+    
     $self->{arp} = NetStack::ARP->new(
 	my_mac => $self->{my_mac},
 	my_ip => $self->{my_ip},
-	arp_cache => $self->{eth}->{arp_cache},
+	arp_cache => $self->{arp_cache},
 	arp_up => $self->{eth}->{arp_up},
 	eth_down => $self->{eth}->{eth_down},
 	task => $self->{task},
+	stdout => $self->{stdout},
+	stdout_p => sub {$self->stdout_p()}
 	);
     
     $self->{ip} = NetStack::IP->new(
@@ -83,35 +88,39 @@ sub initialize {
 	ip_up => $self->{eth}->{ip_up},
 	eth_down => $self->{eth}->{eth_down},
 	task => $self->{task},
+	stdout => $self->{stdout},
+	stdout_p => sub {$self->stdout_p()}
 	);
     
     $self->{tcp} = NetStack::TCP->new(
 	tcp_up => $self->{ip}->{tcp_up},
 	ip_down => $self->{ip}->{ip_down},
-	task => $self->{task}
+	task => $self->{task},
+	stdout => $self->{stdout},
+	stdout_p => sub {$self->stdout_p()}
 	);
     
     $self->{icmp} = NetStack::ICMP->new(
 	icmp_up => $self->{ip}->{icmp_up},
 	ip_down => $self->{ip}->{ip_down},
 	task => $self->{task},
+	stdout => $self->{stdout},
+	stdout_p => sub {$self->stdout_p()}
 	);
-
-    $self->{arp_cache} = $self->{eth}->{arp_cache};
-
+    
     # Link process references with anonymous subroutines
     $self->{eth}->{tap_p} = sub {$self->send_tap()};
     $self->{eth}->{arp_p} = sub {$self->{arp}->process_up()};
     $self->{eth}->{ip_p} = sub {$self->{ip}->process_up()};
-
+    
     $self->{arp}->{eth_p} = sub {$self->{eth}->process_down()};
-
+    
     $self->{ip}->{eth_p} = sub {$self->{eth}->process_down()};
     $self->{ip}->{icmp_p} = sub {$self->{icmp}->process_up()};
     $self->{ip}->{tcp_p} = sub {$self->{tcp}->process_up()};
-
+    
     $self->{icmp}->{ip_p} = sub {$self->{ip}->process_down()};
-
+    
 }
 
 sub run {

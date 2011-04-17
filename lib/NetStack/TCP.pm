@@ -17,6 +17,8 @@ sub new {
 	tcp_down => [],
 	ip_down   => [],
 	ip_p      => sub {},
+	stdout    => [],
+	stdout    => sub {},
 	connections => {},
 	task      => [],
 	@args
@@ -27,20 +29,20 @@ sub new {
 
 sub process_up {
     my ($self) = @_;
-  
+    
     my $tcp_raw = shift(@{$self->{tcp_up}});
-  
+    
     if (!defined $tcp_raw) {
 	return; # Nothing to process
     }
-
+    
     my $tcp_obj = Packet::TCP->new();
-
+    
     # just dump packet for now
     print $tcp_obj->hexdump($tcp_raw);
     
     $tcp_obj->decode($tcp_raw);
-
+    
     # Control Bits:  6 bits (from left to right):
     #
     #  URG:  Urgent Pointer field significant 1 . . . . . 32

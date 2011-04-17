@@ -24,6 +24,8 @@ sub new {
 	eth_p    => sub {},
 	icmp_up  => [],
 	icmp_p   => sub {},
+	stdout    => [],
+	stdout    => sub {},
 	# Need to put other FIFOs here...
 	task     => [],
 	@args

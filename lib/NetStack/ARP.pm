@@ -19,6 +19,8 @@ sub new {
 	arp_down  => [],
 	eth_down  => [],
 	eth_p     => sub {},
+	stdout    => [],
+	stdout    => sub {},
 	arp_cache => {},
 	task =>   => [],
 	my_mac    => "11:22:33:44:55:66",

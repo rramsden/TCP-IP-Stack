@@ -18,6 +18,8 @@ sub new {
 	icmp_down => [],
 	ip_down   => [],
 	ip_p      => sub {},
+	stdout    => [],
+	stdout    => sub {},
 	task      => [],
 	@args
     };

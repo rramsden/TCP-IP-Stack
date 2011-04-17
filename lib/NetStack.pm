@@ -11,6 +11,7 @@ use NetStack::Ethernet;
 use NetStack::ARP;
 use NetStack::IP;
 use NetStack::ICMP;
+use NetStack::TCP;
 
 use AnyEvent;
 
@@ -84,6 +85,12 @@ sub initialize {
 	task => $self->{task},
 	);
     
+    $self->{tcp} = NetStack::TCP->new(
+	tcp_up => $self->{ip}->{tcp_up},
+	ip_down => $self->{ip}->{ip_down},
+	task => $self->{task}
+	);
+    
     $self->{icmp} = NetStack::ICMP->new(
 	icmp_up => $self->{ip}->{icmp_up},
 	ip_down => $self->{ip}->{ip_down},
@@ -101,6 +108,7 @@ sub initialize {
 
     $self->{ip}->{eth_p} = sub {$self->{eth}->process_down()};
     $self->{ip}->{icmp_p} = sub {$self->{icmp}->process_up()};
+    $self->{ip}->{tcp_p} = sub {$self->{tcp}->process_up()};
 
     $self->{icmp}->{ip_p} = sub {$self->{ip}->process_down()};
 

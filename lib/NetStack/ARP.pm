@@ -43,8 +43,8 @@ sub process_up {
     $self->{arp_cache}->{$arp_obj->{sender_ip}} = $arp_obj->{sender_eth};
     
     if ($arp_obj->{target_ip} eq $self->{my_ip}) {
-	#print "ARP: Not for me\n";
-	return;
+	    # ARP not for me
+      return;
     }
 
     if ($arp_obj->{opcode} == 1) {

@@ -18,6 +18,8 @@ sub new {
 	my_ip    => "192.168.56.1",
 	ip_up    => [],
 	ip_down  => [],
+	tcp_up   => [],
+        tcp_p    => sub {},
 	eth_down => [],
 	eth_p    => sub {},
 	icmp_up  => [],
@@ -42,12 +44,16 @@ sub process_up {
     my $ip_obj = Packet::IP->new();
     $ip_obj->decode($ip_raw);
 
-    if ($ip_obj->{proto} == 1) {#ICMP
+    my $protocol = $ip_obj->{proto};
+
+    if ($protocol == 1) {#ICMP
 	push(@{$self->{icmp_up}}, [$ip_obj->{data}, $ip_obj->{src_ip}]);
 	push(@{$self->{task}}, $self->{icmp_p});
-    } elsif ($ip_obj->{proto} == 2) {#IGMP
-	
-    } #...
+    } elsif ($protocol == 2) {#IGMP
+    } elsif ($protocol == 6) {#TCP
+	push(@{$self->{tcp_up}}, $ip_obj->{data});
+	push(@{$self->{task}}, $self->{tcp_p}); # invoke process_up in TCP module
+    }
 
 }
 

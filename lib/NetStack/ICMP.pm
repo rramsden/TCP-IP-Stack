@@ -45,7 +45,6 @@ sub process_up {
 	push(@{$self->{icmp_down}}, [$icmp_obj, $src_ip]);
 	push(@{$self->{task}}, sub {$self->process_down()});
     }
-    
 }
 
 sub process_down {

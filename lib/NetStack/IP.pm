@@ -19,7 +19,7 @@ sub new {
 	ip_up    => [],
 	ip_down  => [],
 	tcp_up   => [],
-        tcp_p    => sub {},
+    tcp_p    => sub {},
 	eth_down => [],
 	eth_p    => sub {},
 	icmp_up  => [],
@@ -51,15 +51,15 @@ sub process_up {
     my $protocol = $ip_obj->{proto};
 
     if ($protocol == 1) {#ICMP
-	push(@{$self->{icmp_up}}, [$ip_obj->{data}, $ip_obj->{src_ip}]);
-	push(@{$self->{task}}, $self->{icmp_p});
+		push(@{$self->{icmp_up}}, [$ip_obj->{data}, $ip_obj->{src_ip}]);
+		push(@{$self->{task}}, $self->{icmp_p});
     } elsif ($protocol == 2) {#IGMP
     } elsif ($protocol == 6) {#TCP
-	push(@{$self->{tcp_up}}, $ip_obj->{data});
-	push(@{$self->{task}}, $self->{tcp_p}); # invoke process_up in TCP module
+		push(@{$self->{tcp_up}}, [$ip_obj->{data}, $ip_obj->{src_ip}]);
+		push(@{$self->{task}}, $self->{tcp_p}); # invoke process_up in TCP module
     } elsif ($protocol == 17) {#UDP
-	push(@{$self->{udp_up}}, [$ip_obj->{data}, $ip_obj->{src_ip}]);
-	push(@{$self->{task}}, $self->{udp_p}); # invoke process_up in TCP module
+		push(@{$self->{udp_up}}, [$ip_obj->{data}, $ip_obj->{src_ip}]);
+		push(@{$self->{task}}, $self->{udp_p}); # invoke process_up in UDP module
     }
 
 }

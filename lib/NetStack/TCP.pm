@@ -65,7 +65,7 @@ sub process_up {
 		my $raw_tcp = $rcv_syn->encode();
 	
 		print "going to send something out on the wire\n";	
-		push(@{$self->{tcp_down}}, [$tcp_obj, $src_ip]);
+		push(@{$self->{tcp_down}}, [$rcv_syn, $src_ip]);
 		push(@{$self->{task}}, sub {$self->process_down()});
     }
 	# SYN/ACK RECEIVED

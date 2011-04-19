@@ -13,13 +13,13 @@ sub new {
     my ($class, @args) = @_;
     
     my $self = {
-	tcp_up   => [],
-	tcp_down => [],
+	tcp_up    => [],
+	tcp_down  => [],
 	ip_down   => [],
 	ip_p      => sub {},
 	stdout    => [],
-	stdout    => sub {},
-	sockets => {},
+	stdout_p  => sub {},
+	sockets   => {},
 	task      => [],
 	@args
     };

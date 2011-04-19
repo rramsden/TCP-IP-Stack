@@ -19,7 +19,7 @@ sub new {
 	ip_down   => [],
 	ip_p      => sub {},
 	stdout    => [],
-	stdout    => sub {},
+	stdout_p  => sub {},
 	task      => [],
 	@args
     };

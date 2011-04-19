@@ -67,6 +67,7 @@ sub initialize {
     $self->{eth} = NetStack::Ethernet->new(
 	arp_cache => $self->{arp_cache},
 	my_mac => $self->{my_mac},
+	my_ip => $self->{my_ip},
 	default => $self->{default},
 	task => $self->{task},
 	stdout => $self->{stdout},
@@ -231,9 +232,12 @@ sub stdin_p {
 
     my $out = "";
     if($command eq "h") {
-	$out = "h\thelp\nl\tlist size of fifo queues\np ip\tping ip address\nq\tquit\n";
+	$out = "h\tHelp\na\tDump ARP cache\nc\tClear ARP cache\nq\tQuit\n";
     } elsif ($command eq "a") {
 	$out = "ARP Cache:\n" . $self->dump_arp();
+    } elsif ($command eq "c") {
+	$out = "ARP cache cleared!\n";
+	%{$self->{arp_cache}} = ();
     } elsif ($command eq "q") {
 	exit(0);
     } else {

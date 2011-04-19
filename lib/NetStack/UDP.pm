@@ -16,11 +16,11 @@ sub new {
     my $self = {
 	udp_up   => [],
 	udp_down => [],
-	ip_down   => [],
-	ip_p      => sub {},
-	stdout    => [],
-	stdout    => sub {},
-	task      => [],
+	ip_down  => [],
+	ip_p     => sub {},
+	stdout   => [],
+	stdout_p => sub {},
+	task     => [],
 	@args
     };
     

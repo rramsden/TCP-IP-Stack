@@ -8,6 +8,7 @@ $VERSION = '0.01';
 use lib "..";
 
 use Packet::Ethernet;
+use Packet::ARP;
 use Packet::Definitions;
 use Packet::Lookup qw/ :mac :ip /;
 
@@ -27,10 +28,11 @@ sub new {
 	tap_down  => [],
 	tap_p     => sub {},
 	stdout    => [],
-	stdout    => sub {},
+	stdout_p  => sub {},
 	arp_cache => {},
 	task      => [],
 	my_mac    => "11:22:33:44:55:66",
+	my_ip     => "192.168.1.100",
 	default   => "192.168.1.1",
 	@args
     };
@@ -47,6 +49,12 @@ sub process_up {
 
     my $eth_obj = Packet::Ethernet->new();
     $eth_obj->decode($eth_raw);
+    
+
+    if ($eth_obj->{dest_mac} ne $self->{my_mac}
+	&& $eth_obj->{dest_mac} ne "00:00:00:00:00:00") {
+	#return; # Not for me
+    }
     
     # Switch on type
     if ($eth_obj->{type} == $ETH_TYPE_ARP) {
@@ -77,7 +85,33 @@ sub process_down {
     # Always use 'default'
     my $dest_eth = $self->{arp_cache}->{ip_to_int($self->{default})};
     if (!defined($dest_eth)) {
-	printf("Need to make an ARP request %s\n", $self->{default});
+	my $out = "Need to make an ARP request to ". $self->{default}. "\n";
+	#push(@{$self->{stdout}}, $out);
+	#push(@{$self->{task}}, sub {$self->stdout_p});
+	
+
+	my $arp_obj = Packet::ARP->new(
+	    opcode => 1,
+	    target_ip => $self->{default},
+	    target_eth => "00:00:00:00:00:00",
+	    sender_ip => $self->{my_ip},
+	    sender_eth => $self->{my_mac}
+	    );
+	
+	my $eth_obj2 = Packet::Ethernet->new(
+	    dest_mac => "ff:ff:ff:ff:ff:ff",
+	    src_mac => $self->{my_mac},
+	    type => $ETH_TYPE_ARP,
+	    data => $arp_obj->encode()
+	    );
+
+	push(@{$self->{tap_down}}, $eth_obj2->encode());
+	push(@{$self->{task}}, $self->{tap_p});
+	
+	
+	push(@{$self->{eth_down}}, [$eth_obj, $dest_ip]);
+	push(@{$self->{task}}, sub {$self->process_down()});
+		
 	return;
     }
 

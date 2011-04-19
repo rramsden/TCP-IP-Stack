@@ -20,7 +20,7 @@ sub new {
 	eth_down  => [],
 	eth_p     => sub {},
 	stdout    => [],
-	stdout    => sub {},
+	stdout_p  => sub {},
 	arp_cache => {},
 	task =>   => [],
 	my_mac    => "11:22:33:44:55:66",
@@ -44,9 +44,9 @@ sub process_up {
     # Update ARP cahce
     $self->{arp_cache}->{$arp_obj->{sender_ip}} = $arp_obj->{sender_eth};
     
-    if ($arp_obj->{target_ip} eq $self->{my_ip}) {
-	    # ARP not for me
-      return;
+    if ($arp_obj->{target_ip} ne $self->{my_ip}) {
+	# ARP not for me
+	#return;
     }
 
     if ($arp_obj->{opcode} == 1) {
@@ -78,6 +78,7 @@ sub process_down {
     if (!defined $arp_obj) {
 	return;
     }
+
     my $eth_obj = Packet::Ethernet->new();
     $eth_obj->{data} = $arp_obj->encode();
     $eth_obj->{type} = $ETH_TYPE_ARP;

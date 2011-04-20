@@ -21,9 +21,6 @@ use Packet::Lookup qw/ :mac :ip /;
 
 use TunTap;
 
-my $ETH_TYPE_ARP = &Packet::Definitions::ETHERTYPE_ARP;
-my $ETH_TYPE_IP = &Packet::Definitions::ETHERTYPE_IP;
-
 $|=1;
 
 # Config params:

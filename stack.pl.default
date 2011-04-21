@@ -7,10 +7,24 @@ use NetStack;
 
 
 my $stack = NetStack->new(
-    my_ip => '10.0.0.31',		# Stack's IP
-    my_mac => 'aa:aa:bb:bb:cc:cc',	# Stack's MAC
-    device => 'tap0',			# Stack's device
+    my_ip => '10.0.0.91',		# Stack's IP
+    my_mac => 'ff:cc:ee:bb:ee:ff',	# Stack's MAC
+    device => 'BGtap',			# Stack's device
     netmask => '255.255.255.0',		# Doesn't really matter..
-    default => '10.0.0.30',		# IP of tap device
+    default => '10.0.0.90',		# IP of tap device
     );
+
+#Ports for TCP and UDP services should be 
+#configured before stack begins running.
+
+#Service setup for udp echo, using port 7
+$stack->{udp}->{ports}->{"7"} = 
+    sub {
+	my ($src_ip, $src_port, $data) = @_;
+
+	my $out = $data . " From: " . $src_ip . " on port: " . $src_port . "\n";
+        push(@{$stack->{stdout}}, $out);
+	push(@{$stack->{task}}, sub {$stack->stdout_p});
+};
+
 $stack->run();

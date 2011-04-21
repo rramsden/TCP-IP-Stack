@@ -97,6 +97,7 @@ sub initialize {
 	task => $self->{task},
 	stdout => $self->{stdout},
 	stdout_p => sub {$self->stdout_p()}
+	#services are configured in stack.pl
 	);
 
     $self->{udp} = NetStack::UDP->new(
@@ -105,6 +106,7 @@ sub initialize {
 	task => $self->{task},
 	stdout => $self->{stdout},
 	stdout_p => sub {$self->stdout_p()}
+	#services are configured in stack.pl
 	);
     
     $self->{icmp} = NetStack::ICMP->new(
@@ -217,25 +219,49 @@ sub stdout_p {
     print("shell: ");
 }
 
+sub udp_send {
+
+    my ($self, $targetIP, $targetPort, $data) = @_;
+    
+    my $udp_obj = Packet::UDP->new();
+    $udp_obj->{src_port} = 7; 
+    $udp_obj->{dest_port} = $targetPort;
+    $udp_obj->{data} = $data;
+    push(@{$self->{udp}->{udp_down}}, [$udp_obj, $targetIP]);
+    push(@{$self->{task}}, sub {$self->{udp}->process_down();});    
+
+}
 
 sub stdin_p {
     my ($self) = @_;
     
-    my $command = shift(@{$self->{stdin}});
-    if (!defined $command) {
+    my $input = shift(@{$self->{stdin}});
+    my @command;
+    if (!defined $input) {
 	return;
     }
-    chop($command);
+    chop($input);
+    
+    my @command = split(/ /, $input);
+    #After the split, assuming correct input 
+    #$command[0] is the command
+    #$command[1] is the target IP address
+    #$command[2] is the target port number 
+    #$command[3] is the message
+    #Anything else is garbage and should be ignored
 
     my $out = "";
-    if($command eq "h") {
-	$out = "h\tHelp\na\tDump ARP cache\nc\tClear ARP cache\nq\tQuit\n";
-    } elsif ($command eq "a") {
+    if($command[0] eq "h") {
+	$out = "h\tHelp\na\tDump ARP cache\nc\tClear ARP cache\ne IP Port Message\tSend message to IP\nq\tQuit\n";
+    } elsif ($command[0] eq "a") {
 	$out = "ARP Cache:\n" . $self->dump_arp();
-    } elsif ($command eq "c") {
+    } elsif ($command[0] eq "c") {
 	$out = "ARP cache cleared!\n";
 	%{$self->{arp_cache}} = ();
-    } elsif ($command eq "q") {
+    }elsif ($command[0] eq "e"){
+	$out = "Sending Echo Packet...\n";
+	$self->udp_send($command[1], $command[2], $command[3]);
+    } elsif ($command[0] eq "q") {
 	exit(0);
     } else {
 	$out = "ERROR type h<CR> for help\n";

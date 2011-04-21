@@ -21,6 +21,7 @@ sub new {
 	stdout   => [],
 	stdout_p => sub {},
 	task     => [],
+	ports    => {},
 	@args
     };
     
@@ -40,9 +41,12 @@ sub process_up {
     my $udp_obj = Packet::UDP->new();
     $udp_obj->decode($udp_raw);
     
-    
-    push(@{$self->{stdout}}, $udp_obj->{dest_port} . ": " .$udp_obj->{data});
-    push(@{$self->{task}},  $self->{stdout_p});
+    my $callback = $self->{ports}->{$udp_obj->{dest_port}};
+    if  (!defined $callback){
+	return; # There is no service on that port.
+    }
+
+    push(@{$self->{task}}, sub {$callback->($src_ip, $udp_obj->{src_port}, $udp_obj->{data})});
     
 }
 

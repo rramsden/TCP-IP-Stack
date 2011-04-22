@@ -64,7 +64,6 @@ sub encode {
 
   $self->{hlen}      = (5 + length($self->{options})) if $self->{autogen_hlen};
   my $reserved       = substr(unpack("B8", pack("C", $self->{reserved})), 2, 6);
-#  my $hlen           = substr(unpack("B8", pack("C", $self->{hlen})), 4, 4);
   my $hlen           = substr(unpack("B8", pack("C", $self->{hlen})), 4, 4); # not reversing
   
   my $pkt = pack(
@@ -77,26 +76,13 @@ sub encode {
       );
 
   if ($self->{autogen_cksum}) {
-    my $octets = 20 + length($self->{data});
-    my $pseudo = pack('A4 A4 C C n', "0" x 8, "0" x 8, 0, 6, $octets);
-    my $cksum = Packet::checksum($pseudo . $pkt . (length($pseudo . $pkt) % 2 ? chr(0) : ""));
-    #substr($pkt, 16, 2, $cksum);
-    $self->{cksum} = $cksum;
+    my $tcp_len = 20 + length($self->{data});
+	my $encoded_src = pack("C4", split(/\./, $src_ip));
+	my $encoded_dest = pack("C4", split(/\./, $dest_ip));
+    my $cksum = Packet::checksum($tcp_len, 6, $encoded_src, $encoded_dest, $pkt);
+    substr($pkt, 16, 2, $cksum);
+    $self->{cksum} = $cksum; 
   }
-
-  # HACK to get around bad checksum
-  my $tcp = NetPacket::TCP->decode($pkt);
-  $tcp->{data} = $self->{data};
-  $tcp->{src_port} = $self->{src_port};
-  $tcp->{dest_port} = $self->{dest_port};
-  
-  $pkt = $tcp->encode(
-      {
-	  src_ip => $src_ip,
-	  dest_ip => $dest_ip
-      });
-  
-  # End of HACK
 
   return $pkt;
 }

@@ -11,19 +11,34 @@ sub new    { die "new() is a virtual method\n"    }
 sub encode { die "encode() is a virtual method\n" }
 sub decode { die "decode() is a virtual method\n" }
 
+# checksum used for UDP, TCP, and IGMP
 sub checksum {
-  my ($msg, $src_ip, $dest_ip) = @_;
-  my $tot = 0;
-  my $tmp;
-  while ($tmp = unpack('n', substr($msg, 0, 2, ''))) {
-    $tot += $tmp;
+  my ($len, $protocol, $src_ip, $dest_ip, $pkt) = @_;
+  my $padding = ($len % 2 == 1); # need to add a byte if size is odd
+  my $sum = 0;          
+  my $i = 0;       
+  
+  if ($padding) {
+	substr($pkt, $len, 1, pack("C", 0)); # append 0x00
   }
-  
-  
-  
-  my $back = pack('n', $tot % 65535);
-  return(~$back);
-}
+
+  # make 16 bit words out of every two adjacent 8 bit words and 
+  # calculate the sum of all 16 vit words
+  for($i = 0; $i < $len + $padding; $i = $i+2) {
+    $sum += unpack('n', substr($pkt, 0, 2, ''));
+  }
+
+  # sum up 16 bit entries for ip addresses
+  for($i = 0; $i < 4; $i = $i+2) {
+    $sum += unpack('n', substr($src_ip, 0, 2, ''));
+    $sum += unpack('n', substr($dest_ip, 0, 2, ''));
+  }
+
+  $sum += ($protocol + $len);
+  $sum = (($sum & 0xFFFF) + ($sum >> 16)); # only last 16 bits and add carries
+    
+  return pack('n', ~$sum); # bitwise-not / one's complement of sum
+} 
 
 # taken from Convert::BER and modified very slightly;)
 sub hexdump ($;$) {

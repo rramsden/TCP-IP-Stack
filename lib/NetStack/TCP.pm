@@ -13,7 +13,7 @@ sub new {
     my ($class, @args) = @_;
     
     my $self = {
-	my_ip     => "192.168.1.100",
+	my_ip     => "133.7.0.1",
 	tcp_up    => [],
 	tcp_down  => [],
 	ip_down   => [],
@@ -61,7 +61,7 @@ sub process_up {
 	    src_port => $tcp_obj->{dest_port},
 	    dest_port => $tcp_obj->{src_port},
 	    syn => 1,
-	    ack => 1	
+	    ack => 1
 	    );
 	#my $raw_tcp = $rcv_syn->encode();
 	
@@ -76,13 +76,13 @@ sub process_up {
 
 
 sub process_down {
-	my ($self) = @_;
+my ($self) = @_;
 
-	my $tuple = shift(@{$self->{tcp_down}});
+my $tuple = shift(@{$self->{tcp_down}});
 
-	if (!defined $tuple) {
-		return; # Nothing to process
-	}
+if (!defined $tuple) {
+	return; # Nothing to process
+}
 
     my ($tcp_obj, $dest_ip) = @{$tuple};
   

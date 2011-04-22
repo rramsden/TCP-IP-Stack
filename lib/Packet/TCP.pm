@@ -65,7 +65,7 @@ sub encode {
   $self->{hlen}      = (5 + length($self->{options})) if $self->{autogen_hlen};
   my $reserved       = substr(unpack("B8", pack("C", $self->{reserved})), 4, 4);
   my $hlen           = substr(unpack("B8", pack("C", $self->{hlen})), 4, 4); # not reversing
-  
+ 
   my $pkt = pack(
       'n n N N B16 n n n a*',
       $self->{src_port},	$self->{dest_port},

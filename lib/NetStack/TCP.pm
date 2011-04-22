@@ -56,21 +56,23 @@ sub process_up {
  
     # SYN RECVIEVED
     if ($tcp_obj->{syn} == 1 && $tcp_obj->{ack} == 0) {
-	# reply to client that we acknowledge the request to establish connection
-	my $rcv_syn = Packet::TCP->new(
-	    src_port => $tcp_obj->{dest_port},
-	    dest_port => $tcp_obj->{src_port},
-	    syn => 1,
-	    ack => 1
-	    );
-	#my $raw_tcp = $rcv_syn->encode();
+      my $rcv_syn = Packet::TCP->new(
+        src_port => $tcp_obj->{dest_port},
+        dest_port => $tcp_obj->{src_port},
+        syn => 1,
+        ack => 1,
+        acknum => $tcp_obj->{seqnum} + 1 # increase by one to indicated next sequence in stream
+      );
+
+      #my $raw_tcp = $rcv_syn->encode();
 	
-	#print "going to send something out on the wire\n";	
-	push(@{$self->{tcp_down}}, [$rcv_syn, $src_ip]);
-	push(@{$self->{task}}, sub {$self->process_down()});
+      #print "going to send something out on the wire\n";	
+      push(@{$self->{tcp_down}}, [$rcv_syn, $src_ip]);
+      push(@{$self->{task}}, sub {$self->process_down()});
     }
-    # SYN/ACK RECEIVED
-    elsif ($tcp_obj->{syn} == 1 && $tcp_obj->{ack} == 1) {
+    # CONNECTION ESTABLISHED
+    elsif ($tcp_obj->{fin} == 0 && $tcp_obj->{ack} == 1) {
+      print "client " . $src_ip . " connected on port " . $tcp_obj->{dest_port} . "\n";
     }
 }
 

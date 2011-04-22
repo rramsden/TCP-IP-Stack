@@ -63,7 +63,7 @@ sub encode {
     if $self->{dest_port} !~ /^\d+$/;
 
   $self->{hlen}      = (5 + length($self->{options})) if $self->{autogen_hlen};
-  my $reserved       = substr(unpack("B8", pack("C", $self->{reserved})), 2, 6);
+  my $reserved       = substr(unpack("B8", pack("C", $self->{reserved})), 4, 4);
   my $hlen           = substr(unpack("B8", pack("C", $self->{hlen})), 4, 4); # not reversing
   
   my $pkt = pack(

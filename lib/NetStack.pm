@@ -232,6 +232,18 @@ sub udp_send {
 
 }
 
+sub ping{
+    my ($self, $ip, @rest) = @_;
+    my $pingPack = Packet::ICMP->new();
+    $pingPack->{type}=8;
+    $pingPack->{autogen_cksum}=1;
+    $pingPack->{data}=pack('nn',1,2);
+    my $ipToPing=$ip;
+    my $tuple = [$pingPack, $ipToPing];
+    push(@{$self->{icmp}->{icmp_down}}, $tuple);
+    push(@{$self->{task}}, sub {$self->{icmp}->process_down()});
+}
+
 sub stdin_p {
     my ($self) = @_;
     
@@ -263,6 +275,8 @@ sub stdin_p {
 	$self->udp_send($command[1], $command[2], $command[3]);
     } elsif ($command[0] eq "q") {
 	exit(0);
+    }elsif ($command[0] eq "p") {
+	$self->ping($command[1]);
     } else {
 	$out = "ERROR type h<CR> for help\n";
     }

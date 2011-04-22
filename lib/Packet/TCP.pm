@@ -8,6 +8,7 @@ use vars qw/ $VERSION @ISA /;
 $VERSION = '0.01';
 
 use Packet;
+use NetPacket::TCP;
 @ISA = qw/ Packet /;
 
 use overload '""' => sub { encode($_[0]) };
@@ -17,9 +18,8 @@ foreach ( qw( autogen_cksum reserved autogen_hlen src_port dest_port seqnum ackn
     eval "sub $_ () { (\@_ > 1) ? \$_[0]->{$_} = \$_[1] : \$_[0]->{$_} }";
 }
 
-sub new ($;@) {
+sub new {
   my ($class, %args) = @_;
-  my %param = _param_parse(%args);
 
   my $self = {
     autogen_cksum => 1,
@@ -30,57 +30,32 @@ sub new ($;@) {
     acknum        => 0,
     hlen          => 5,
     reserved      => 0,
+    # Flags
+    cwr           => 0,
+    ece           => 0,
     urg	          => 0,
     ack	          => 0,
     psh	          => 0,
     rst	          => 0,
     syn	          => 0,
     fin           => 0,
+    # End Flags
     winsize       => int(rand(2 ** 16)),
     cksum         => 0,
     urgp          => 0,
     options       => "",
     data          => "",
-    %param,
+    %args
   };	
 
   return bless $self, ref($class) || $class;
 }
 
-sub _param_parse {
-  my %args = @_;
-  my %param;
-  foreach (keys %args) {
-    if    (/^-?autogen_cksum/i || /^-?auto_cksum/i)    
-                                { $param{autogen_cksum} = $args{$_} }
-    elsif (/^-?autogen_hlen/i  || /^-?auto_hlen/i)  
-                                { $param{autogen_hlen}  = $args{$_} }
-    elsif (/^-?src_port/i)      { $param{src_port}      = $args{$_} }
-    elsif (/^-?dest_port/i)     { $param{dest_port}     = $args{$_} }
-    elsif (/^-?seqnum/i)        { $param{seqnum}        = $args{$_} }
-    elsif (/^-?acknum/i)        { $param{acknum}        = $args{$_} }
-    elsif (/^-?hlen/i)          { $param{hlen}          = $args{$_} }
-    elsif (/^-?reserved/i)      { $param{reserved}      = $args{$_} }
-    elsif (/^-?urg/i)           { $param{urg}           = $args{$_} }
-    elsif (/^-?ack/i)           { $param{ack}           = $args{$_} }
-    elsif (/^-?psh/i)           { $param{psh}           = $args{$_} }
-    elsif (/^-?rst/i)           { $param{rst}           = $args{$_} }
-    elsif (/^-?syn/i)           { $param{syn}           = $args{$_} }
-    elsif (/^-?fin/i)           { $param{fin}           = $args{$_} }
-    elsif (/^-?winsize/i)       { $param{winsize}       = $args{$_} }
-    elsif (/^-?cksum/i)         { $param{cksum}         = $args{$_} }
-    elsif (/^-?urgp/i)          { $param{urgp}          = $args{$_} }
-    elsif (/^-?options/i)       { $param{options}       = $args{$_} }
-    elsif (/^-?data/i)          { $param{data}          = $args{$_} }
-  }
-  return %param;
-}
+sub encode {
+  my ($self, $src_ip, $dest_ip) = @_;
 
-sub encode ($;@) {
-  my ($self, %args) = @_;
-
-  my $flags = $self->{urg} . $self->{ack} . $self->{psh} . 
-              $self->{rst} . $self->{syn} . $self->{fin};
+  my $flags = $self->{cwr} . $self->{ece} . $self->{urg} . $self->{ack} .
+              $self->{psh} . $self->{rst} . $self->{syn} . $self->{fin};
 
   $self->{src_port}  = (getservbyname($self->{src_port},  "tcp"))[2] 
     if $self->{src_port}  !~ /^\d+$/;
@@ -91,43 +66,57 @@ sub encode ($;@) {
   my $reserved       = substr(unpack("B8", pack("C", $self->{reserved})), 2, 6);
 #  my $hlen           = substr(unpack("B8", pack("C", $self->{hlen})), 4, 4);
   my $hlen           = substr(unpack("B8", pack("C", $self->{hlen})), 4, 4); # not reversing
-
+  
   my $pkt = pack(
-    'n n N N B16 n n n a*',
-     $self->{src_port},	$self->{dest_port},
-     $self->{seqnum},	$self->{acknum},
-     "${hlen}${reserved}${flags}",
-     $self->{winsize},	$self->{cksum},
-     $self->{urgp},	$self->{options} . $self->{data},
-  );
+      'n n N N B16 n n n a*',
+      $self->{src_port},	$self->{dest_port},
+      $self->{seqnum},	$self->{acknum},
+      "${hlen}${reserved}${flags}",
+      $self->{winsize},	$self->{cksum},
+      $self->{urgp},	$self->{options} . $self->{data},
+      );
 
   if ($self->{autogen_cksum}) {
     my $octets = 20 + length($self->{data});
     my $pseudo = pack('A4 A4 C C n', "0" x 8, "0" x 8, 0, 6, $octets);
     my $cksum = Packet::checksum($pseudo . $pkt . (length($pseudo . $pkt) % 2 ? chr(0) : ""));
-    substr($pkt, 16, 2, $cksum);
+    #substr($pkt, 16, 2, $cksum);
     $self->{cksum} = $cksum;
   }
+
+  # HACK to get around bad checksum
+  my $tcp = NetPacket::TCP->decode($pkt);
+  $tcp->{data} = $self->{data};
+  $tcp->{src_port} = $self->{src_port};
+  $tcp->{dest_port} = $self->{dest_port};
+  
+  $pkt = $tcp->encode(
+      {
+	  src_ip => $src_ip,
+	  dest_ip => $dest_ip
+      });
+  
+  # End of HACK
 
   return $pkt;
 }
 
-sub decode ($$) {
+sub decode {
   my ($self, $pkt) = @_;
 
   $self->{autogen_cksum} = 0;
   $self->{autogen_hlen}  = 0;
 
   my ($olen, $flags);
- ($self->{src_port}, $self->{dest_port}, $self->{seqnum}, $self->{acknum}, 
-  $flags, $self->{winsize}, $self->{cksum}, $self->{urgp}, $self->{data}
+  ($self->{src_port}, $self->{dest_port}, $self->{seqnum}, $self->{acknum}, 
+   $flags, $self->{winsize}, $self->{cksum}, $self->{urgp}, $self->{data}
   ) = unpack 'n n N N B16 n n n a*', $pkt;
-
+  
   $self->{hlen} = substr $flags, 0, 4, '';
-  $self->{reserved} = substr $flags, 0, 6, '';
- ($self->{urg}, $self->{ack}, $self->{psh}, 
-  $self->{rst}, $self->{syn}, $self->{fin}
-  ) = split //, $flags;
+  $self->{reserved} = substr $flags, 0, 4, '';
+ ($self->{cwr}, $self->{ece}, $self->{urg}, $self->{ack},
+  $self->{psh}, $self->{rst}, $self->{syn}, $self->{fin}
+ ) = split //, $flags;
 
   my $place = my $result = 0;
   foreach ( reverse $self->{hlen} =~ /(.)/g ) {

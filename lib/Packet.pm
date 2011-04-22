@@ -12,12 +12,15 @@ sub encode { die "encode() is a virtual method\n" }
 sub decode { die "decode() is a virtual method\n" }
 
 sub checksum {
-  my ($msg) = @_;
+  my ($msg, $src_ip, $dest_ip) = @_;
   my $tot = 0;
   my $tmp;
   while ($tmp = unpack('n', substr($msg, 0, 2, ''))) {
     $tot += $tmp;
   }
+  
+  
+  
   my $back = pack('n', $tot % 65535);
   return(~$back);
 }

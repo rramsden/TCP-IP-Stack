@@ -92,6 +92,7 @@ sub initialize {
 	);
     
     $self->{tcp} = NetStack::TCP->new(
+	my_ip => $self->{my_ip},
 	tcp_up => $self->{ip}->{tcp_up},
 	ip_down => $self->{ip}->{ip_down},
 	task => $self->{task},

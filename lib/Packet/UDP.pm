@@ -8,9 +8,10 @@ use vars qw/ $VERSION @ISA /;
 $VERSION = '0.01';
 
 use Packet;
+use NetPacket::UDP;
 @ISA = qw/ Packet /;
 
-use overload '""' => sub { encode($_[0]) };
+#use overload '""' => sub { encode($_[0]) };
 
 
 #  generate accessor/mutator methods
@@ -20,7 +21,7 @@ foreach ( qw( autogen_len autogen_cksum src_port dest_port len cksum data ) ) {
 
 sub new {
   my ($class, %args) = @_;
-  my %param = _param_parse(%args);
+
   my $self = {
     autogen_cksum	=> 1,
     autogen_len		=> 1,
@@ -29,71 +30,84 @@ sub new {
     len			=> 0,
     cksum		=> 0,
     data		=> '',
-    %param,
-  };	
-
+    %args,
+  };
+  
   return bless $self, ref($class) || $class;
 }
 
-sub _param_parse {
-  my %args = @_;
-  my %param;
-  foreach (keys %args) {
-    if    (/^-?autogen_cksum/i || /^-?auto_cksum/i)
-                                { $param{autogen_cksum} = $args{$_} }
-    elsif (/^-?autogen_len/i  || /^-?auto_len/i)
-                                { $param{autogen_len}   = $args{$_} }
-    elsif (/^-?src_port/i)      { $param{src_port}      = $args{$_} }
-    elsif (/^-?dest_port/i)     { $param{dest_port}     = $args{$_} }
-    elsif (/^-?len/i)           { $param{len}           = $args{$_} }
-    elsif (/^-?cksum/i)         { $param{cksum}         = $args{$_} }
-    elsif (/^-?data/i)          { $param{data}          = $args{$_} }
-  }
-  return %param;
-}
-
 sub encode {
-  my ($self, %args) = @_;
+    my ($self, $src_ip, $dest_ip) = @_;
 
-  if ($self->{src_port} !~ /^\d+$/)  {
-    $self->{src_port} = (getservbyname($self->{src_port}, "udp"))[2];
-  }
-  if ($self->{dest_port} !~ /^\d+$/) {
-    $self->{dest_port} = (getservbyname($self->{dest_port}, "udp"))[2];
-  }
+    if ($self->{src_port} !~ /^\d+$/)  {
+	$self->{src_port} = (getservbyname($self->{src_port}, "udp"))[2];
+    }
+    if ($self->{dest_port} !~ /^\d+$/) {
+	$self->{dest_port} = (getservbyname($self->{dest_port}, "udp"))[2];
+    }
+    
+    my $pkt = pack(
+	'n			n
+         n			n
+         a*',
+	$self->{src_port},	$self->{dest_port},
+	$self->{len},           0,
+	$self->{data}
+	);
+    
+    if ($self->{autogen_len}) {
+	my $len = length($pkt);
+	substr($pkt, 4, 2) = pack("n", $len);
+	$self->{len} = $len;
+    } elsif ($self->{autogen_cksum}) {
 
-  my $pkt = pack(
-   'n			n
-    n			n
-    a*',
-    $self->{src_port},	$self->{dest_port},
-    $self->{len},	$self->{cksum},
-    $self->{data}
-  );
+	$src_ip = ip_to_int(host_to_ip($src_ip))  if $src_ip  =~ /\./;
+	$dest_ip = ip_to_int(host_to_ip($dest_ip))  if $dest_ip  =~ /\./;
+	
+	my $packet = pack(
+	    'a4                 a4
+             n                  n
+             n                  n
+             n                  n
+             a*',
+	    $src_ip,            $dest_ip,
+	    17,                 $self->{len},
+	    $self->{src_port},  $self->{dest_port}, 
+	    $self->{len},       0,
+	    $self->{data});
 
-  if ($self->{autogen_len}) {
-    my $len = length($pkt);
-    substr($pkt, 4, 2) = $len;
-    $self->{len} = $len;
-  }
-  if ($self->{autogen_cksum}) {
-    my $cksum = Packet::checksum($pkt);
-    substr($pkt, 6, 2) = $cksum;
-    $self->{cksum} = $cksum;
-  }
-  return $pkt;
+	
+	
+	my $cksum = NetPacket::in_cksum($packet);
+	#my $cksum = Packet::checksum($pkt);
+	$self->{cksum} = $cksum;
+    }
+    substr($pkt, 6, 2) = $self->{cksum};
+
+    my $udp = NetPacket::UDP->decode($pkt);
+    $udp->{data} = $self->{data};
+    $udp->{src_port} = $self->{src_port};
+    $udp->{dest_port} = $self->{dest_port};
+
+    $pkt = $udp->encode(
+	{
+	    src_ip => $src_ip,
+	    dest_ip => $dest_ip
+	});
+	    
+    return $pkt;
 }
 
 sub decode {
-  my ($self, $pkt) = @_;
-
-  $self->{autogen_cksum} = 0;
-  $self->{autogen_len}   = 0;
-
-  ($self->{src_port}, $self->{dest_port}, 
-   $self->{len}, $self->{cksum}, $self->{data}
-   ) = unpack("nnnna*", $pkt);
-  return 1;
+    my ($self, $pkt) = @_;
+    
+    $self->{autogen_cksum} = 0;
+    $self->{autogen_len}   = 0;
+    
+    ($self->{src_port}, $self->{dest_port}, 
+     $self->{len}, $self->{cksum}, $self->{data}
+    ) = unpack("nnnna*", $pkt);
+    return 1;
 }
 
 1;

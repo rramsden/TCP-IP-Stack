@@ -101,6 +101,7 @@ sub initialize {
 	);
 
     $self->{udp} = NetStack::UDP->new(
+	my_ip => $self->{my_ip},
 	udp_up => $self->{ip}->{udp_up},
 	ip_down => $self->{ip}->{ip_down},
 	task => $self->{task},
@@ -254,7 +255,7 @@ sub stdin_p {
     }
     chop($input);
     
-    my @command = split(/ /, $input);
+    @command = split(/ /, $input);
     #After the split, assuming correct input 
     #$command[0] is the command
     #$command[1] is the target IP address

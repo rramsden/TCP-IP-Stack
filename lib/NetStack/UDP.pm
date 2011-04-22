@@ -14,6 +14,7 @@ sub new {
     my ($class, @args) = @_;
     
     my $self = {
+	my_ip    => "192.168.1.100",
 	udp_up   => [],
 	udp_down => [],
 	ip_down  => [],
@@ -63,7 +64,7 @@ sub process_down {
     my $ip_obj = Packet::IP->new();
     $ip_obj->{dest_ip} = $dest_ip;
     $ip_obj->{proto} = 17; #UDP
-    $ip_obj->{data} = $udp_obj->encode();
+    $ip_obj->{data} = $udp_obj->encode($self->{my_ip}, $dest_ip);
     
     push(@{$self->{ip_down}}, $ip_obj);
     push(@{$self->{task}}, $self->{ip_p});

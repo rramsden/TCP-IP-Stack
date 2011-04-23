@@ -8,6 +8,7 @@ $VERSION = '0.01';
 use lib "..";
 
 use Packet::TCP;
+use Packet::TCP qw/ :flags /;
 
 sub new {
     my ($class, @args) = @_;
@@ -40,7 +41,7 @@ sub process_up {
     
     my $tcp_obj = Packet::TCP->new();
     $tcp_obj->decode($tcp_raw);
-    
+
     # Control Bits:  6 bits (from left to right):
     #
     #  URG:  Urgent Pointer field significant 1 . . . . . 32
@@ -53,48 +54,48 @@ sub process_up {
 
     # Diagram for TCP state machine http://tools.ietf.org/html/rfc793#page-23
 	# basic SYN/ACK shinnenigans below 
- 
+
     # SYN RECVIEVED
-    if ($tcp_obj->{syn} == 1 && $tcp_obj->{ack} == 0) {
-      my $rcv_syn = Packet::TCP->new(
+    if ($tcp_obj->{flags} == SYN) {
+      $tcp_obj = Packet::TCP->new(
         src_port => $tcp_obj->{dest_port},
         dest_port => $tcp_obj->{src_port},
-        syn => 1,
-        ack => 1,
+        flags => (SYN|ACK),
         acknum => $tcp_obj->{seqnum} + 1 # increase by one to indicated next sequence in stream
       );
 
-      #my $raw_tcp = $rcv_syn->encode();
-	
-      #print "going to send something out on the wire\n";	
-      push(@{$self->{tcp_down}}, [$rcv_syn, $src_ip]);
+      push(@{$self->{tcp_down}}, [$tcp_obj, $src_ip]);
       push(@{$self->{task}}, sub {$self->process_down()});
     }
     # CONNECTION ESTABLISHED
-    elsif ($tcp_obj->{fin} == 0 && $tcp_obj->{ack} == 1) {
+    elsif ($tcp_obj->{flags} == ACK) {
       print "client " . $src_ip . " connected on port " . $tcp_obj->{dest_port} . "\n";
     }
+	# REQUEST TERMINATION
+	elsif ($tcp_obj->{flags} == (FIN|ACK)) {
+      print "closing connection " . $src_ip . " on port " . $tcp_obj->{dest_port} . "\n";
+	}
 }
 
 
 sub process_down {
-my ($self) = @_;
+  my ($self) = @_;
 
-my $tuple = shift(@{$self->{tcp_down}});
+  my $tuple = shift(@{$self->{tcp_down}});
 
-if (!defined $tuple) {
-	return; # Nothing to process
-}
+  if (!defined $tuple) {
+    return; # Nothing to process
+  }
 
-    my ($tcp_obj, $dest_ip) = @{$tuple};
+  my ($tcp_obj, $dest_ip) = @{$tuple};
   
-    my $ip_obj = Packet::IP->new();
-    $ip_obj->{dest_ip} = $dest_ip;
-    $ip_obj->{proto} = 6; #TCP
-    $ip_obj->{data} = $tcp_obj->encode($self->{my_ip}, $dest_ip);
+  my $ip_obj = Packet::IP->new();
+  $ip_obj->{dest_ip} = $dest_ip;
+  $ip_obj->{proto} = 6; #TCP
+  $ip_obj->{data} = $tcp_obj->encode($self->{my_ip}, $dest_ip);
     
-    push(@{$self->{ip_down}}, $ip_obj);
-    push(@{$self->{task}}, $self->{ip_p});
+  push(@{$self->{ip_down}}, $ip_obj);
+  push(@{$self->{task}}, $self->{ip_p});
 }
 
 1;

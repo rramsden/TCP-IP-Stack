@@ -4,12 +4,30 @@ package Packet::TCP;
 
 use strict;
 
-use vars qw/ $VERSION @ISA /;
+use vars qw/ $VERSION @ISA @EXPORT_OK %EXPORT_TAGS /;
 $VERSION = '0.01';
 
 use Packet;
-use NetPacket::TCP;
-@ISA = qw/ Packet /;
+require Exporter;
+@ISA = qw/ Packet Exporter /;
+
+my @flags = qw/ CWR ECN URG ACK PSH RST SYN FIN /;
+
+%EXPORT_TAGS = (
+  flags => [@flags]	
+);
+
+@EXPORT_OK = ( @{ $EXPORT_TAGS{'flags'} } );
+
+# TCP control flags
+sub CWR () { 128 }
+sub ECN () { 64 }
+sub URG () { 32 }
+sub ACK () { 16 }
+sub PSH () { 8 }
+sub RST () { 4 }
+sub SYN () { 2 }
+sub FIN () { 1 }
 
 use overload '""' => sub { encode($_[0]) };
 
@@ -30,16 +48,7 @@ sub new {
     acknum        => 0,
     hlen          => 5,
     reserved      => 0,
-    # Flags
-    cwr           => 0,
-    ece           => 0,
-    urg	          => 0,
-    ack	          => 0,
-    psh	          => 0,
-    rst	          => 0,
-    syn	          => 0,
-    fin           => 0,
-    # End Flags
+    flags         => 0, # bitwise OR to set flags ie. SYN|ACK
     winsize       => int(rand(2 ** 16)),
     cksum         => 0,
     urgp          => 0,
@@ -54,9 +63,6 @@ sub new {
 sub encode {
   my ($self, $src_ip, $dest_ip) = @_;
 
-  my $flags = $self->{cwr} . $self->{ece} . $self->{urg} . $self->{ack} .
-              $self->{psh} . $self->{rst} . $self->{syn} . $self->{fin};
-
   $self->{src_port}  = (getservbyname($self->{src_port},  "tcp"))[2] 
     if $self->{src_port}  !~ /^\d+$/;
   $self->{dest_port} = (getservbyname($self->{dest_port}, "tcp"))[2] 
@@ -65,7 +71,8 @@ sub encode {
   $self->{hlen}      = (5 + length($self->{options})) if $self->{autogen_hlen};
   my $reserved       = substr(unpack("B8", pack("C", $self->{reserved})), 4, 4);
   my $hlen           = substr(unpack("B8", pack("C", $self->{hlen})), 4, 4); # not reversing
- 
+  my $flags = substr(unpack("B32", pack("N", $self->{flags})), 24, 18);
+
   my $pkt = pack(
       'n n N N B16 n n n a*',
       $self->{src_port},	$self->{dest_port},
@@ -97,12 +104,10 @@ sub decode {
   ($self->{src_port}, $self->{dest_port}, $self->{seqnum}, $self->{acknum}, 
    $flags, $self->{winsize}, $self->{cksum}, $self->{urgp}, $self->{data}
   ) = unpack 'n n N N B16 n n n a*', $pkt;
-  
+
   $self->{hlen} = substr $flags, 0, 4, '';
   $self->{reserved} = substr $flags, 0, 4, '';
- ($self->{cwr}, $self->{ece}, $self->{urg}, $self->{ack},
-  $self->{psh}, $self->{rst}, $self->{syn}, $self->{fin}
- ) = split //, $flags;
+  $self->{flags} = unpack("N", pack("B32", substr("0" x 32 . $flags, -32)));
 
   my $place = my $result = 0;
   foreach ( reverse $self->{hlen} =~ /(.)/g ) {

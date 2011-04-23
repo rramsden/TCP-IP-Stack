@@ -8,7 +8,7 @@ $VERSION = '0.01';
 use lib "..";
 
 use Packet::TCP;
-use Packet::TCP qw/ :flags /;
+use Packet::TCP qw/ :flags :states /;
 
 sub new {
     my ($class, @args) = @_;
@@ -23,6 +23,7 @@ sub new {
 	stdout_p  => sub {},
 	sockets   => {},
 	task      => [],
+    connections => {},
 	@args
     };
     
@@ -41,40 +42,70 @@ sub process_up {
     
     my $tcp_obj = Packet::TCP->new();
     $tcp_obj->decode($tcp_raw);
+    my $src_port = $tcp_obj->{src_port};
+    my $dest_port = $tcp_obj->{dest_port};
 
-    # Control Bits:  6 bits (from left to right):
-    #
-    #  URG:  Urgent Pointer field significant 1 . . . . . 32
-    #  ACK:  Acknowledgment field significant . 1 . . . . 16
-    #  PSH:  Push Function                    . . 1 . . .  8
-    #  RST:  Reset the connection             . . . 1 . .  4
-    #  SYN:  Synchronize sequence numbers     . . . . 1 .  2
-    #  FIN:  No more data from sender	      . . . . . 1  1
-    #
+	# fetch session information
+	my ($sequence, $state) = (0,0);
+	if ( $self->{connections}{$tcp_obj->{src_port}} ) {
+    	($sequence, $state) = @{$self->{connections}{$tcp_obj->{src_port}}};
+	}
 
     # Diagram for TCP state machine http://tools.ietf.org/html/rfc793#page-23
 	# basic SYN/ACK shinnenigans below 
 
     # SYN RECVIEVED
     if ($tcp_obj->{flags} == SYN) {
-      $tcp_obj = Packet::TCP->new(
-        src_port => $tcp_obj->{dest_port},
-        dest_port => $tcp_obj->{src_port},
-        flags => (SYN|ACK),
-        acknum => $tcp_obj->{seqnum} + 1 # increase by one to indicated next sequence in stream
-      );
-
-      push(@{$self->{tcp_down}}, [$tcp_obj, $src_ip]);
-      push(@{$self->{task}}, sub {$self->process_down()});
+      if (!$state) {
+        $tcp_obj = Packet::TCP->new(
+          src_port => $dest_port,
+          dest_port => $src_port,
+          flags => (SYN|ACK),
+          acknum => $tcp_obj->{seqnum} + 1 # increase by one to indicated next sequence in stream
+        );
+        
+		# create connection, store initial state and ISN (intial sequence number)
+        $self->{connections}{$src_port} = [$tcp_obj->{seqnum}, SYN_RECEIVED];
+      }
     }
     # CONNECTION ESTABLISHED
     elsif ($tcp_obj->{flags} == ACK) {
+      $self->{connections}{$tcp_obj->{src_port}} = [$sequence, ESTABLISHED];
       print "client " . $src_ip . " connected on port " . $tcp_obj->{dest_port} . "\n";
     }
-	# REQUEST TERMINATION
+    # RECEIVING TCP STREAM
+    elsif ($tcp_obj->{flags} == (PSH|ACK)) {
+      # acknowledge data
+      $tcp_obj = Packet::TCP->new(
+        src_port => $tcp_obj->{dest_port},
+        dest_port => $tcp_obj->{src_port},
+        flags => ACK,
+        seqnum => $sequence + 1,
+        acknum => $tcp_obj->{seqnum} + 1
+      );
+     
+      $self->{connections}{$tcp_obj->{src_port}} = [$sequence + 1, ESTABLISHED]; 
+	}
+	# CLOSE WAIT
 	elsif ($tcp_obj->{flags} == (FIN|ACK)) {
+
+      # acknowledge request for connection close
+      $tcp_obj = Packet::TCP->new(
+        src_port => $tcp_obj->{dest_port},
+        dest_port => $tcp_obj->{src_port},
+        flags => ACK,
+        seqnum => $sequence + 1,
+        acknum => $tcp_obj->{seqnum} + 1
+      );
+
+      $self->{connections}{$tcp_obj->{src_port}} = [$sequence + 1, CLOSE_WAIT]; 
+      
       print "closing connection " . $src_ip . " on port " . $tcp_obj->{dest_port} . "\n";
 	}
+    
+    # push out tcp packet
+    push(@{$self->{tcp_down}}, [$tcp_obj, $src_ip]);
+    push(@{$self->{task}}, sub {$self->process_down()});
 }
 
 

@@ -47,7 +47,7 @@ sub process_up {
 	
     } elsif ($icmp_obj->{type} == ICMP_ECHO) { # Ping request
 	$icmp_obj->{type} = ICMP_ECHO_REPLY;
-	$icmp_obj->{autogen_chksum} = 1; # Important!
+	$icmp_obj->{autogen_cksum} = 1; # Important!
 	push(@{$self->{icmp_down}}, [$icmp_obj, $src_ip]);
 	push(@{$self->{task}}, sub {$self->process_down()});
     

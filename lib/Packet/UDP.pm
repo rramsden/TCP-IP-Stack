@@ -8,7 +8,8 @@ use vars qw/ $VERSION @ISA /;
 $VERSION = '0.01';
 
 use Packet;
-use NetPacket::UDP;
+use Packet::Lookup qw/ :ip /;
+
 @ISA = qw/ Packet /;
 
 #use overload '""' => sub { encode($_[0]) };
@@ -59,42 +60,18 @@ sub encode {
 	my $len = length($pkt);
 	substr($pkt, 4, 2) = pack("n", $len);
 	$self->{len} = $len;
-    } elsif ($self->{autogen_cksum}) {
-
-	$src_ip = ip_to_int(host_to_ip($src_ip))  if $src_ip  =~ /\./;
-	$dest_ip = ip_to_int(host_to_ip($dest_ip))  if $dest_ip  =~ /\./;
-	
-	my $packet = pack(
-	    'a4                 a4
-             n                  n
-             n                  n
-             n                  n
-             a*',
-	    $src_ip,            $dest_ip,
-	    17,                 $self->{len},
-	    $self->{src_port},  $self->{dest_port}, 
-	    $self->{len},       0,
-	    $self->{data});
-
-	
-	
-	my $cksum = NetPacket::in_cksum($packet);
-	#my $cksum = Packet::checksum($pkt);
-	$self->{cksum} = $cksum;
     }
+
+    if ($self->{autogen_cksum}) {
+	my $encoded_src = pack("C4", split(/\./, $src_ip));
+	my $encoded_dest = pack("C4", split(/\./, $dest_ip));
+	my $cksum = Packet::checksum($self->{len}, 17, $encoded_src, $encoded_dest, $pkt);
+
+	$self->{cksum} = $cksum; 
+    }
+    
     substr($pkt, 6, 2) = $self->{cksum};
 
-    my $udp = NetPacket::UDP->decode($pkt);
-    $udp->{data} = $self->{data};
-    $udp->{src_port} = $self->{src_port};
-    $udp->{dest_port} = $self->{dest_port};
-
-    $pkt = $udp->encode(
-	{
-	    src_ip => $src_ip,
-	    dest_ip => $dest_ip
-	});
-	    
     return $pkt;
 }
 

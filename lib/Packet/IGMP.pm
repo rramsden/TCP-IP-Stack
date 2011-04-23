@@ -17,7 +17,7 @@ my @types = qw/ IGMP_MEMBERSHIP_QUERY  IGMP_MEM_REPORT_V1  IGMP_MEM_REPORT_V2  I
     all       => [@types],
     constants => [@types],
     types     => [@types],
-);
+    );
 
 use Packet::Lookup qw/ :ip /;
 
@@ -33,65 +33,80 @@ use overload '""' => sub { encode($_[0]) };
 #  Object Methods
 
 #  generate accessor methods
-foreach ( qw( type version group unused cksum autogen_cksum ) ) {
+foreach ( qw( type code cksum identifier group key autogen_cksum ) ) {
     eval "sub $_ () { (\@_ > 1) ? \$_[0]->{$_} = \$_[1] : \$_[0]->{$_} }";
 }
 
 sub new {
-  my ($class, %args) = @_;
-  my $self = {
-    autogen_cksum	=> 1,
-    version		=> 1,
-    type		=> 1,
-    cksum		=> 0,
-    unused		=> 0,
-    group		=> '127.0.0.1',
-    %args
-  };
-
-  return bless $self, ref($class) || $class;
+    my ($class, %args) = @_;
+    my $self = {
+	autogen_cksum	=> 1,
+	type		=> 1,
+	code		=> 0,
+	cksum		=> 0,
+	identifier      => 0,
+	group		=> '127.0.0.1',
+	key             => 0,
+	%args
+    };
+    print "IGMP is not to spec...\n";
+    return bless $self, ref($class) || $class;
 }
 
 sub encode {
-  my ($self) = @_;
-
-  $self->{group} = ip_to_int(host_to_ip($self->{group})) if $self->{group} =~ /\./;
-
-  my $pkt = pack(
-   'C
-    C			n
-    N',
-   ($self->{version} << 4) | $self->{type},
-    $self->{unused},	$self->{cksum},
-    $self->{group}
-  );
-  if ($self->{autogen_cksum}) {      
-    my $cksum = Packet::checksum($pkt);
-    substr($pkt, 2, 2) = $cksum;
-    $self->{cksum} = $cksum;
-  }
-
-  return $pkt;
+    my ($self) = @_;
+    
+    $self->{group} = ip_to_int(host_to_ip($self->{group})) if $self->{group} =~ /\./;
+    
+    my $pkt = pack(
+	'C                      C
+         n                      N
+         N                      N',# key is not packed properly
+	$self->{type},   	$self->{code},
+  	0,              	$self->{identifier},
+	$self->{group},         $self->{key}
+	);
+    if ($self->{autogen_cksum}) {
+	$self->{cksum} = &igmp_checksum($pkt);
+    }
+    substr($pkt, 2, 2) = $self->{cksum};
+    
+    return $pkt;
 }
 
 sub decode {
-  my ($self, $pkt) = @_;
-  my $w;
-
-  $self->{autogen_cksum} = 0;
-
-  ($w,			$self->{unused},
-   $self->{cksum},      $self->{group}) = unpack(
-  'C			C
-   n			N', $pkt
-  );
-
-  $self->{version}      = ($w & 0xf0) >> 4;
-  $self->{type}         = $w & 0x0f;
-  $self->{group}	= int_to_ip($self->{group});
-
-  return 1;
+    my ($self, $pkt) = @_;
+    
+    $self->{autogen_cksum} = 0;
+    
+    ($self->{type},   	$self->{code},
+     0,              	$self->{identifier},
+     $self->{group},         $self->{key}) = unpack(
+	'C			C
+         n			N
+         N                      N', $pkt
+	 );
+    
+    $self->{group} = int_to_ip($self->{group});
+    
+    return 1;
 }
+
+sub igmp_checksum {
+  my $pkt       = shift();
+  my $len_msg   = length($pkt); 
+  my $num_short = $len_msg / 2;
+  my $chk       = 0;
+  foreach my $short (unpack("S$num_short", $pkt)) {
+    $chk += $short;
+  }
+  if ($len_msg % 2) {
+    $chk += unpack("C", substr($pkt, $len_msg - 1, 1));
+  }
+  $chk = ($chk >> 16) + ($chk & 0xffff);
+  return unpack("n", scalar reverse pack("n", (~(($chk >> 16) + $chk) & 0xffff)));
+}
+
 
 1;
 __END__

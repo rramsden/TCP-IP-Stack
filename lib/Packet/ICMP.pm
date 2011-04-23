@@ -89,57 +89,53 @@ sub new {
 
 # Modified by Simon Trigona
 sub encode {
-  my ($self) = @_;
-
-  if ($self->{autogen_cksum}) {      
-      my $pseudo = pack(
-	  'C			C
-           n			a*',
-	  $self->{type},	$self->{code},
-	  0,            	$self->{data}
-	  );
-
-      my $cksum = &icmp_checksum($pseudo);
-      $self->{cksum} = $cksum;
-  }
-
-  my $pkt = pack(
-   'C			C
-    n			a*',
-    $self->{type},	$self->{code},
-    $self->{cksum},	$self->{data}
-  );
-
-  return $pkt;
+    my ($self) = @_;
+    
+    my $pkt = pack(
+	'C			C
+         n			a*',
+	$self->{type},	$self->{code},
+	0,            	$self->{data}
+	);
+    if ($self->{autogen_cksum}) {
+	$self->{cksum} = &icmp_checksum($pkt);
+    }
+    substr($pkt, 2, 2) = pack('n', $self->{cksum});
+    
+    return $pkt;
 }
 
 sub decode {
-  my ($self, $pkt) = @_;
+    my ($self, $pkt) = @_;
+    
+    $self->{autogen_cksum} = 0;
+    
+    ($self->{type},	$self->{code},
+     $self->{cksum},      $self->{data}) = unpack(
+	'C			C
+         n			a*', $pkt
+	 );
 
-  $self->{autogen_cksum} = 0;
-
-  ($self->{type},	$self->{code},
-   $self->{cksum},      $self->{data}) = unpack(
-  'C			C
-   n			a*', $pkt
-  );
-
-  return 1;
+    return 1;
 }
 
 sub icmp_checksum {
-  my $pkt       = shift();
-  my $len_msg   = length($pkt); 
-  my $num_short = $len_msg / 2;
-  my $chk       = 0;
-  foreach my $short (unpack("S$num_short", $pkt)) {
-    $chk += $short;
-  }
-  if ($len_msg % 2) {
-    $chk += unpack("C", substr($pkt, $len_msg - 1, 1));
-  }
-  $chk = ($chk >> 16) + ($chk & 0xffff);
-  return unpack("n", scalar reverse pack("n", (~(($chk >> 16) + $chk) & 0xffff)));
+    my $pkt       = shift();
+    my $len_msg   = length($pkt); 
+    my $chk       = 0;
+    
+    my $i = 0;
+    for($i = 0; $i < $len_msg; $i = $i+2) {
+	$chk += unpack('n', substr($pkt, 0, 2, ''));
+    }
+
+    if ($len_msg % 2) {
+	$chk += unpack("C", substr($pkt, $len_msg - 1, 1));
+    }
+
+    $chk = (($chk & 0xFFFF) + ($chk >> 16)); # only last 16 bits and add carries
+    $chk += $chk >> 16;
+    return ~$chk;# bitwise-not / one's complement of chk
 }
 
 

@@ -36,7 +36,7 @@ sub checksum {
 
   $sum += ($protocol + $len);
   $sum = (($sum & 0xFFFF) + ($sum >> 16)); # only last 16 bits and add carries
-    
+  $sum += ($sum >> 16);    # add possible carry from previous carry addition
   return pack('n', ~$sum); # bitwise-not / one's complement of sum
 } 
 

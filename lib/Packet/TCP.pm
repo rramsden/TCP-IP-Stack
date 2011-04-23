@@ -13,11 +13,16 @@ require Exporter;
 
 my @flags = qw/ CWR ECN URG ACK PSH RST SYN FIN /;
 
+# http://tools.ietf.org/html/rfc793#page-21
+my @states = qw/ LISTEN SYN_SENT SYN_RECEIVED ESTABLISHED FIN_WAIT_1 FIN_WAIT_2 CLOSE_WAIT CLOSING LAST_ACK /;
+
 %EXPORT_TAGS = (
-  flags => [@flags]	
+  all => [@flags, @states],
+  flags => [@flags],
+  states => [@states]
 );
 
-@EXPORT_OK = ( @{ $EXPORT_TAGS{'flags'} } );
+@EXPORT_OK = ( @{ $EXPORT_TAGS{'all'} } );
 
 # TCP control flags
 sub CWR () { 128 }
@@ -28,6 +33,17 @@ sub PSH () { 8 }
 sub RST () { 4 }
 sub SYN () { 2 }
 sub FIN () { 1 }
+
+# TCP state machine
+sub LISTEN       () { 1 }
+sub SYN_SENT     () { 2 }
+sub SYN_RECEIVED () { 3 }
+sub ESTABLISHED  () { 4 }
+sub FIN_WAIT_1   () { 5 }
+sub FIN_WAIT_2   () { 6 }
+sub CLOSE_WAIT   () { 7 }
+sub CLOSING      () { 8 }
+sub LAST_ACK     () { 9 }
 
 use overload '""' => sub { encode($_[0]) };
 

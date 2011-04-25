@@ -65,7 +65,7 @@ sub process_up {
 	push(@{$self->{ip_up}}, $eth_obj->{data});
 	push(@{$self->{task}}, $self->{ip_p});
     } else {
-	print $eth_obj->{type}, "\n";
+	#print $eth_obj->{type}, "\n";
     }
 }
 
@@ -84,8 +84,9 @@ sub process_down {
 
     $eth_obj->{src_mac} = $self->{my_mac};
     # Always use 'default'
-    my ($dest_eth, $time) = $self->{arp_cache}->{ip_to_int($self->{default})};
-    if (!defined($dest_eth)) {
+
+    $tuple = $self->{arp_cache}->{ip_to_int($self->{default})};
+    if (!defined($tuple)) {
 	my $out = "Need to make an ARP request to ". $self->{default}. "\n";
 	#push(@{$self->{stdout}}, $out);
 	#push(@{$self->{task}}, sub {$self->stdout_p});
@@ -112,13 +113,13 @@ sub process_down {
 	# Move Ethernet packet into eth_wait queue
 	push(@{$self->{eth_wait}}, [$eth_obj, $dest_ip]);
 			
-	return;
+    } else {
+	my ($dest_eth, $time) = @{$tuple};
+	$eth_obj->{dest_mac} = $dest_eth;
+	
+	push(@{$self->{tap_down}}, $eth_obj->encode());
+	push(@{$self->{task}}, $self->{tap_p});
     }
-
-    $eth_obj->{dest_mac} = $dest_eth;
-    
-    push(@{$self->{tap_down}}, $eth_obj->encode());
-    push(@{$self->{task}}, $self->{tap_p});
 }
 
 # Moves ethernet objects back into the eth_down queue when they have a MAC

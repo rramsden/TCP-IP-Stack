@@ -21,6 +21,7 @@ sub new {
     my $self = {
 	eth_up    => [],
 	eth_down  => [],
+	eth_wait  => [],
 	arp_up    => [],
 	arp_p     => sub {},
 	ip_up     => [],
@@ -83,13 +84,13 @@ sub process_down {
 
     $eth_obj->{src_mac} = $self->{my_mac};
     # Always use 'default'
-    my $dest_eth = $self->{arp_cache}->{ip_to_int($self->{default})};
+    my ($dest_eth, $time) = $self->{arp_cache}->{ip_to_int($self->{default})};
     if (!defined($dest_eth)) {
 	my $out = "Need to make an ARP request to ". $self->{default}. "\n";
 	#push(@{$self->{stdout}}, $out);
 	#push(@{$self->{task}}, sub {$self->stdout_p});
 	
-
+	# No ARP entry.. send ARP request
 	my $arp_obj = Packet::ARP->new(
 	    opcode => 1,
 	    target_ip => $self->{default},
@@ -108,27 +109,39 @@ sub process_down {
 	push(@{$self->{tap_down}}, $eth_obj2->encode());
 	push(@{$self->{task}}, $self->{tap_p});
 	
-	
-	push(@{$self->{eth_down}}, [$eth_obj, $dest_ip]);
-	push(@{$self->{task}}, sub {$self->process_down()});
-		
+	# Move Ethernet packet into eth_wait queue
+	push(@{$self->{eth_wait}}, [$eth_obj, $dest_ip]);
+			
 	return;
     }
 
     $eth_obj->{dest_mac} = $dest_eth;
-    #print $eth_obj->{dest_mac}, "\n";
-
-    #my $dest_mac = lookup_ip($dest_ip);
-    #if (defined($dest_mac)) {
-    #$eth_obj->dest_mac($dest_mac);
-    #} else {
-    # Put eth_obj + dest_ip in list
-    # Send ARP request
-    #}
     
-    my $eth_raw = $eth_obj->encode();
-    push(@{$self->{tap_down}}, $eth_raw);
+    push(@{$self->{tap_down}}, $eth_obj->encode());
     push(@{$self->{task}}, $self->{tap_p});
+}
+
+# Moves ethernet objects back into the eth_down queue when they have a MAC
+sub process_wait {
+    my ($self) = @_;
+
+    
+    for (0..$#{$self->{eth_wait}}) {
+	# Get the dest_ip
+	my ($eth_obj, $dest_ip) = @{$self->{eth_wait}[$_]};
+	# Check if we have a MAC for the IP
+	my $tuple = $self->{arp_cache}->{ip_to_int($self->{default})};
+	if (defined($tuple)) {
+	    my ($dest_eth, $time) = @{$tuple};
+	    
+	    # Move Ethernet packet back into eth_down
+	    push(@{$self->{eth_down}}, [$eth_obj, $dest_ip]);
+	    push(@{$self->{task}}, sub {$self->process_down()});
+	    
+	    # Remove from eth_wait
+	    delete(${$self->{eth_wait}}[$_]);
+	}
+    }
 }
 
 1;

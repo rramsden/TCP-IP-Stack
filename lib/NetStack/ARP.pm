@@ -42,7 +42,7 @@ sub process_up {
     my $arp_obj = Packet::ARP->new();
     $arp_obj->decode($arp_raw);
     # Update ARP cahce
-    $self->{arp_cache}->{$arp_obj->{sender_ip}} = $arp_obj->{sender_eth};
+    $self->{arp_cache}->{$arp_obj->{sender_ip}} = [$arp_obj->{sender_eth}, 255];
     
     if ($arp_obj->{target_ip} ne $self->{my_ip}) {
 	# ARP not for me
@@ -84,6 +84,22 @@ sub process_down {
     $eth_obj->{type} = $ETH_TYPE_ARP;
     push(@{$self->{eth_down}}, [$eth_obj, $arp_obj->{target_ip}]);
     push(@{$self->{task}}, $self->{eth_p});
+}
+
+sub timeout_cache {
+    my ($self) = @_;
+    
+    my ($ip, $ref);
+    while (($ip, $ref) = each(%{$self->{arp_cache}})){
+	my($dest_eth, $time) = @{$ref};
+	if ($time < 0) {
+	    #remove from hash
+	    delete($self->{arp_cache}->{$ip});
+	} else {
+	    $self->{arp_cache}->{$ip} = [$dest_eth, $time-1];
+	}
+    }
+    
 }
 
 1;

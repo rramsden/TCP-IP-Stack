@@ -186,6 +186,23 @@ sub run {
 	    }
 	}
 	);
+
+    my $eth_timer = AnyEvent->timer(
+	after => 1,
+	interval => .1,
+	cb => sub {
+	    $self->{eth}->process_wait();
+	}
+	);
+
+    my $arp_timer = AnyEvent->timer(
+	after => 1,
+	interval => .5,
+	cb => sub {
+	    $self->{arp}->timeout_cache();
+	}
+	);
+	
     
     $y_event->recv;
 
@@ -195,9 +212,10 @@ sub run {
 sub dump_arp {
     my ($self) = @_;
     my $rtn = "";
-    for my $key (keys %{$self->{arp_cache}}) {
-	$rtn = $rtn . int_to_ip($key) . " -> ";
-	$rtn = $rtn . $self->{arp_cache}->{$key} . "\n";
+    for my $ip (keys %{$self->{arp_cache}}) {
+	my ($eth, $time) = @{$self->{arp_cache}->{$ip}};
+	$rtn = $rtn . int_to_ip($ip) . " -> ";
+	$rtn = $rtn . $eth . " ($time)\n";
     }
     return $rtn;
 }

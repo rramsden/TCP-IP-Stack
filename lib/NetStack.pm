@@ -284,7 +284,11 @@ sub stdin_p {
 
     my $out = "";
     if($command[0] eq "h") {
-	$out = "h\tHelp\na\tDump ARP cache\nc\tClear ARP cache\ne IP Port Message\tSend message to IP\nq\tQuit\n";
+	$out = "h - Help\n" .
+               "a - Dump ARP cache\n" .
+	       "c - Clear ARP cache\n" .
+	       "e <ip> <port> <message> - UDP message to echoserver at <ip> on <port>\n" .
+	       "q - Quit\n";
     } elsif ($command[0] eq "a") {
 	$out = "ARP Cache:\n" . $self->dump_arp();
     } elsif ($command[0] eq "c") {

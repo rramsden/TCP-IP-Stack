@@ -132,7 +132,7 @@ sub decode {
   $self->{hlen} = unpack("C", pack("B8", sprintf("%08d", $self->{hlen})));
   $self->{reserved} = unpack("C", pack("B8", sprintf("%08d", $self->{reserved})));
   $olen = $result - 5;
-  $olen = 0, if ($olen < 0);
+  $olen = 0; # disable options for now ... #, if ($olen < 0);
   ($self->{options}, $self->{data}) = unpack("a" . $olen . "a*", $self->{data});
   return 1;
 }

@@ -39,7 +39,6 @@ sub new {
 
 sub process_up {
     my ($self) = @_;
-
     my $ip_raw = shift(@{$self->{ip_up}});
     if (!defined $ip_raw) {
 	return;

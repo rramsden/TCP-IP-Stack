@@ -251,7 +251,30 @@ sub udp_send {
     $udp_obj->{data} = $data;
     push(@{$self->{udp}->{udp_down}}, [$udp_obj, $targetIP]);
     push(@{$self->{task}}, sub {$self->{udp}->process_down();});    
+}
 
+
+sub start_web {
+    my ($self, $port) = @_;
+    
+    # lame socket interface for stack allows to register callback methods.
+    $self->{tcp}->{sockets}{$port} = sub {
+      my ($data, $src_port, $dest_port) = @_;
+      my $canned_response = "HTTP/1.0 200 OK\n".
+                            "Server: NetStack\n" .
+                            "Content-type: text/html\n" .
+                            "Last-Modified: Thu Jul  7 00:025:33 2011\n" .
+                            "Content-Length: 11\n\n" .
+                            "Hello World";
+
+      my $tcp_obj = Packet::TCP->new(
+        src_port => $dest_port,
+        dest_port => $src_port,
+        flags => (Packet::TCP::PSH|Packet::TCP::ACK), 
+        data => $canned_response
+      );
+      return $tcp_obj;
+    }
 }
 
 sub ping{
@@ -342,27 +365,33 @@ sub stdin_p {
     #Anything else is garbage and should be ignored
 
     my $out = "";
+    
     if($command[0] eq "h") {
-	$out = "h - Help\n" .
-               "a - Dump ARP cache\n" .
-	       "c - Clear ARP cache\n" .
-	       "e <ip> <port> <message> - UDP message to echoserver at <ip> on <port>\n" .
-	       "q - Quit\n";
+      $out = "h - Help\n" .
+             "a - Dump ARP cache\n" .
+             "c - Clear ARP cache\n" .
+             "e <ip> <port> <message> - UDP message to echoserver at <ip> on <port>\n" .
+             "s - start HTTP server\n" .
+             "q - Quit\n";
     } elsif ($command[0] eq "a") {
-	$out = "ARP Cache:\n" . $self->dump_arp();
+      $out = "ARP Cache:\n" . $self->dump_arp();
     } elsif ($command[0] eq "c") {
-	$out = "ARP cache cleared!\n";
-	%{$self->{arp_cache}} = ();
-    }elsif ($command[0] eq "e"){
-	$out = "Sending Echo Packet...\n";
-	$self->udp_send($command[1], $command[2], $command[3]);
+      $out = "ARP cache cleared!\n";
+      %{$self->{arp_cache}} = ();
+    } elsif ($command[0] eq "e") {
+      $out = "Sending Echo Packet...\n";
+      $self->udp_send($command[1], $command[2], $command[3]);
+    } elsif ($command[0] eq "s") { 
+      $out = "Starting webserver on port 80\n";
+      $self->start_web(80);
     } elsif ($command[0] eq "q") {
-	exit(0);
-    }elsif ($command[0] eq "p") {
-	push(@{$self->{task}}, sub{$self->ping($command[1], 1)});
+      exit(0);
+    } elsif ($command[0] eq "p") {
+      $self->ping($command[1]);
     } else {
-	$out = "ERROR type h<CR> for help\n";
+      $out = "ERROR type h<CR> for help\n";
     }
+
     push(@{$self->{stdout}}, $out);
     push(@{$self->{task}}, sub {$self->stdout_p});
 }

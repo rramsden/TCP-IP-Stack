@@ -47,6 +47,7 @@ sub new {
 	arp_cache => {},
 	stdout => [],
 	task => [],
+	icmp_out => [],
 	# Will overwrite any of the default values with the user's
 	@args
     };
@@ -116,7 +117,8 @@ sub initialize {
 	ip_down => $self->{ip}->{ip_down},
 	task => $self->{task},
 	stdout => $self->{stdout},
-	stdout_p => sub {$self->stdout_p()}
+	stdout_p => sub {$self->stdout_p()},
+	out_arr => $self->{icmp_out}
 	);
     
     # Link process references with anonymous subroutines
@@ -253,15 +255,72 @@ sub udp_send {
 }
 
 sub ping{
-    my ($self, $ip, @rest) = @_;
+    my ($self, $ip, $sequence, @rest) = @_;
     my $pingPack = Packet::ICMP->new();
+    my $pingIdentifier = 6387;
+
     $pingPack->{type}=8;
     $pingPack->{autogen_cksum}=1;
-    $pingPack->{data}=pack('nn',1,2);
+    $pingPack->{data}=pack('nn',$pingIdentifier, $sequence);
     my $ipToPing=$ip;
     my $tuple = [$pingPack, $ipToPing];
     push(@{$self->{icmp}->{icmp_down}}, $tuple);
     push(@{$self->{task}}, sub {$self->{icmp}->process_down()});
+    push(@{$self->{task}}, sub{$self->pingInPack($sequence);});
+}
+
+sub pingInPack{
+    my ($self, $sequence, @rest) = @_;
+    #dont flood network, wait for a reply before requesting again
+    #reply could be redirect, unreachable, reply, or time out\
+    my $arraySize=@{$self->{icmp_out}};
+    if ($arraySize==0){
+	push(@{$self->{task}}, sub{$self->pingInPack($sequence);});
+	return;
+    }else{
+	my $tuple=shift(@{$self->{icmp_out}});
+	my ($packRec, $src_ip)=@{$tuple};
+	my $out;
+	my $reping=1;
+
+	if ($packRec->{type}==ICMP_ECHO_REPLY){
+	    $out="Ping replied to!\n";
+	}elsif ($packRec->{type}==ICMP_DEST_UNREACH){
+	    $out="Destination unreachable, ping stopped";
+	    $reping=0;
+	}elsif ($packRec->{type}==ICMP_REDIRECT){
+	    $out="Recieved redirect, next packet to new destination";
+	    $src_ip=unpack('N', $packRec->{data}); #N is 32 bit network order
+	    #and ip addresses are 32 bit integers. This functionality
+	    #is untested.
+	}elsif ($packRec->{type}==ICMP_TIME_EXCEED){
+	    $out="Time out reached";
+        }else{
+	    $reping=0;
+	}
+	push(@{$self->{stdout}}, $out);
+	push(@{$self->{task}}, sub{$self->stdout_p});
+	my $command="$src_ip";
+	$sequence+=1;
+	if (($reping==1) && ($sequence<11)){
+	    push(@{$self->{task}}, sub{$self->ping($command, $sequence);});
+	}
+    }
+    #while (!defined $packRec){
+    # print ("Waiting");
+    #    $packRec=shift(@{$self->{icmp_out}});
+    #}
+    
+    #guarenteed to have a packet now
+    #so check identifier
+    #my ($packRecID, $sequencenum)=unpack('nn',$packRec->{data});
+    #while (!$packRecID==$pingIdentifier){
+    #   print $packRecID;
+    #  print $sequencenum;
+    # push(@{$self->{icmp_out}}, $packRec);
+    #$packRec=shift(@{$self->{icmp_out}}); 
+    #($packRecID, $sequencenum)=unpack('nn',$packRec->{data});
+    #}
 }
 
 sub stdin_p {
@@ -300,7 +359,7 @@ sub stdin_p {
     } elsif ($command[0] eq "q") {
 	exit(0);
     }elsif ($command[0] eq "p") {
-	$self->ping($command[1]);
+	push(@{$self->{task}}, sub{$self->ping($command[1], 1)});
     } else {
 	$out = "ERROR type h<CR> for help\n";
     }

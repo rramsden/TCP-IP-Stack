@@ -21,6 +21,7 @@ sub new {
 	stdout    => [],
 	stdout_p    => sub {},
 	task      => [],
+	out_arr => [],
 	@args
     };
     
@@ -41,9 +42,7 @@ sub process_up {
     $icmp_obj->decode($icmp_raw);
     if ($icmp_obj->{type} == ICMP_ECHO_REPLY) { # Ping reply
 	#for now just put on the queue to right to std out
-	my $out="Ping replied to\n";
-	push(@{$self->{stdout}},$out);
-	push(@{$self->{task}},$self->{stdout_p});
+	push(@{$self->{out_arr}}, [$icmp_obj, $src_ip]);
 	
     } elsif ($icmp_obj->{type} == ICMP_ECHO) { # Ping request
 	$icmp_obj->{type} = ICMP_ECHO_REPLY;
@@ -52,19 +51,22 @@ sub process_up {
 	push(@{$self->{task}}, sub {$self->process_down()});
     
     } elsif ($icmp_obj->{type} == ICMP_DEST_UNREACH) { #recieved a destination unreachable packet...
-	my $out="Destination Unreachable\n";
-	push(@{$self->{stdout}},$out);
-	push(@{$self->{task}}, $self->{stdout_p});
+	push(@{$self->{out_arr}}, [$icmp_obj, $src_ip]);
+	print("dest unreachable");
 
     } elsif ($icmp_obj->{type} == ICMP_SRC_QUENCH) { #recieved a source quench packet...
 
     } elsif ($icmp_obj->{type} == ICMP_REDIRECT) { #recieved a redirect packet...
+	push(@{$self->{out_arr}}, [$icmp_obj, $src_ip]);
+	print("redirect");
 
     } elsif ($icmp_obj->{type} == 9) { #9 is not in the PACKET module but is Router Advertisement
 
     } elsif ($icmp_obj->{type} == 10) { #10 is also not in the PACKET module means Router Selection
 
     } elsif ($icmp_obj->{type} == ICMP_TIME_EXCEED) { #time was exceeded for a response look at the code
+	push(@{$self->{out_arr}}, [$icmp_obj, $src_ip]);
+	print("time exceeded");
 
     } elsif ($icmp_obj->{type} == ICMP_PARAM_PROBLEM) { #there was a problem with the paramaters also look at the code
 
